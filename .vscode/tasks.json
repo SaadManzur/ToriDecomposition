@@ -1,0 +1,47 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558 
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "Build",
+            "command": "/usr/bin/g++",
+            "args": [
+                "-g",
+                "${workspaceRoot}/main.cpp",
+                "-o",
+                "${workspaceRoot}/build/main",
+                "-I",
+                "/usr/local/include/libigl/",
+                "-I",
+                "/usr/local/include/libigl/eigen",
+                "-I",
+                "/usr/local/include/libigl/glad/include",
+                "-I",
+                "/usr/local/include/libigl/glfw/include",
+                "-L",
+                "/usr/local/include/libigl/external/embree/tutorials/common/glfw/x64/vc14/glfw3.lib"
+            ],
+            "options": {
+                "cwd": "/usr/bin"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "type": "shell",
+            "label": "Run",
+            "command": "${workspaceRoot}/build/main",
+            "dependsOn": [
+                "build"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}
