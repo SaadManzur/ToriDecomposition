@@ -25,17 +25,24 @@ int main(int argc, char *argv[])
   Graph primal;
   primal.buildGraphFromVerticesAndFaces(vertices, faces);
   Eigen::MatrixXd weightsPrimal = computeEdgeWeights(vertices, primal.getEdges(), curvature.maximalDirection);
-  Graph primalMST = primal.buildMST(weightsPrimal);
+  Graph tree = primal.buildMST(weightsPrimal);
 
   Graph dual = primal.getDual();
+  dual.removeEdgesForDual(tree.getEdges());
   Eigen::MatrixXd weightsDual = transferDualWeights(weightsPrimal, dual.getEdges(), dual.getDualMap());
-  Graph dualMST = dual.buildMST(weightsDual);
+  Graph cotree = dual.buildMST(weightsDual);
+
+  Graph cycles;
+  cycles.buildGraphFromVerticesAndEdges(primal.getVertices(), primal.getEdges());
+  cycles.removeEdges(tree.getEdges());
+  cycles.removeEdgesForInverseDual(cotree.getEdges(), dual.getDualMap());
 
   igl::opengl::glfw::Viewer viewer;
   viewer.data().set_mesh(vertices, faces);
-  viewer.data().line_width = 2.0f;
-  viewer.data().add_edges(primalMST.getVisualizer().vertices1, primalMST.getVisualizer().vertices2, Eigen::RowVector3d(1.0, 0.0, 0.0));
-  viewer.data().add_edges(dualMST.getVisualizer().vertices1, dualMST.getVisualizer().vertices2, Eigen::RowVector3d(0.0, 0.0, 1.0));
+  viewer.data().line_width = 4.0f;
+  viewer.data().add_edges(tree.getVisualizer().vertices1, tree.getVisualizer().vertices2, Eigen::RowVector3d(1.0, 0.0, 0.0));
+  viewer.data().add_edges(cotree.getVisualizer().vertices1, cotree.getVisualizer().vertices2, Eigen::RowVector3d(0.0, 0.0, 1.0));
+  viewer.data().add_edges(cycles.getVisualizer().vertices1, cycles.getVisualizer().vertices2, Eigen::RowVector3d(0.0, 1.0, 0.0));
   //viewer.data().add_edges(maxCurvatureVisualizer.vertices1, maxCurvatureVisualizer.vertices2, Eigen::RowVector3d(1.0, 0.0, 0.0));
   //viewer.data().add_edges(minCurvatureVisualizer.vertices1, minCurvatureVisualizer.vertices2, Eigen::RowVector3d(0.0, 0.0, 1.0));
   

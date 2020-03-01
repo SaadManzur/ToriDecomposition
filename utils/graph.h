@@ -40,6 +40,9 @@ public:
     Graph buildMST(const Eigen::MatrixXd weights);
     vector<int> findCommonVertices(int face1, int face2);
     void printGraphInformatiaon();
+    void removeEdgesForInverseDual(const Eigen::MatrixXi dualEdges, map<VertexPair, VertexPair> dualMap);
+    void removeEdgesForDual(const Eigen::MatrixXi primalEdges);
+    void removeEdges(const Eigen::MatrixXi edgesToRemove);
     void setDualMap(map<pair<int, int>, pair<int, int>> dualMap);
     map<pair<int, int>, pair<int, int>> getDualMap();
     Eigen::MatrixXd getVertices();

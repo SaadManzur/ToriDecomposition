@@ -28,9 +28,6 @@ Eigen::MatrixXd computeEdgeWeights(const Eigen::MatrixXd vertices, const Eigen::
 
     Eigen::MatrixXd weights = Eigen::MatrixXd::Zero(edges.rows(), edges.cols());
 
-    cout << "V: " << vertices.rows() << " " << vertices.cols() << endl;
-    cout << "E: " << edges.rows() << " " << edges.cols() << endl;
-
     for(int i = 0; i < edges.rows(); i++) {
 
         for(int j = i; j < edges.rows(); j++) {
@@ -64,12 +61,12 @@ Eigen::MatrixXd transferDualWeights(const Eigen::MatrixXd primalEdgeWeights, con
 
                 pair<int, int> mappedPrimalEdge = dualMap[pair<int, int>(i, j)];
 
-                cout << i << " " << j << " <=> " << mappedPrimalEdge.first << " " << mappedPrimalEdge.second << endl;
-
                 weights(i, j) = primalEdgeWeights(mappedPrimalEdge.first, mappedPrimalEdge.second);
             }
         }
     }
+
+    cout << "Weights computed" << endl;
 
     return weights;
 }

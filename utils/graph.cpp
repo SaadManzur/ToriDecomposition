@@ -133,6 +133,8 @@ Graph Graph::buildMST(const Eigen::MatrixXd weights) {
 
     boost::kruskal_minimum_spanning_tree(graph, back_inserter(spanningTree));
 
+    cout << "Spanning tree built" << endl;
+
     Eigen::MatrixXi treeAdjacency = Eigen::MatrixXi::Zero(weights.rows(), weights.cols());
 
     for(Edge e : spanningTree) {
@@ -140,6 +142,8 @@ Graph Graph::buildMST(const Eigen::MatrixXd weights) {
         treeAdjacency(boost::source(e, graph), boost::target(e, graph)) = 1;
     }
     
+    cout << "Building graph from MST" << endl;
+
     Graph tree;
     tree.buildGraphFromVerticesAndEdges(this->vertices, treeAdjacency);
 
@@ -182,9 +186,9 @@ Graph Graph::getDual() {
 
                 vector<int> common = findCommonVertices(i, faceAdjacency(i, j));
 
-                pair<int, int> key1(i, faceAdjacency(i, j)), key2(faceAdjacency(i, j), i), value(common[0], common[1]);
+                pair<int, int> key1(i, faceAdjacency(i, j)), value1(common[0], common[1]);
 
-                dualMap.insert({{key1, value}, {key2, value}});
+                dualMap.insert({{key1, value1}});
             }
         }
     }
@@ -226,4 +230,199 @@ void Graph::setDualMap(map<pair<int, int>, pair<int, int>> dualMap) {
 map<pair<int, int>, pair<int, int>> Graph::getDualMap() {
 
     return this->dualMap;
+}
+
+void Graph::removeEdgesForInverseDual(const Eigen::MatrixXi dualEdges, map<VertexPair, VertexPair> dualMap) {
+
+    cout << "Removing edges from primal graph" << endl;
+
+    cout << "Removing edges from dual graph" << endl;
+
+    int count = 0;
+
+    for(map<VertexPair, VertexPair>::iterator it = dualMap.begin(); it != dualMap.end(); it++) {
+        
+        count++;
+    }    
+
+    cout << "Map has " << count << " keys." << endl;
+
+    count = 0;
+
+    for(int i = 0; i < dualEdges.rows(); i++) {
+
+        for(int j = i; j < dualEdges.cols(); j++) {
+
+            if(dualEdges(i, j) == 1) {
+
+                count++;
+
+                bool found = false;
+
+                for(map<VertexPair, VertexPair>::iterator it = dualMap.begin(); it != dualMap.end(); it++) {
+
+                    if((it->first.first == i && it->first.second == j) || (it->first.first == j && it->first.second == i)) {
+
+                        edges(it->second.first, it->second.second) = 0;
+                        edges(it->second.second, it->second.first) = 0;
+
+                        boost::remove_edge(it->second.first, it->second.second, graph);
+
+                        found = true;
+
+                        break;
+                    }
+                }
+
+                if (!found)
+                    cout << "Did not find mapping for " << i << " " << j << endl;
+            }
+        }
+    }
+
+    cout << count << " edges removed" << endl;
+
+    cout << "After removing edges:" << endl;
+    printGraphInformatiaon();
+
+    
+    this->visualizer.vertices1 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
+    this->visualizer.vertices2 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
+
+    count = 0;
+    for(int i = 0; i < edges.rows(); i++) {
+
+        for(int j = i; j < edges.cols(); j++) {
+
+            if(edges(i, j) == 1) {
+
+                this->visualizer.vertices1.row(count) = this->vertices.row(i);
+                this->visualizer.vertices2.row(count) = this->vertices.row(j);
+
+                count++;
+            }
+        }
+    }
+
+    cout << "Updataed visualizer for " << count << " edges" << endl;
+}
+
+void Graph::removeEdgesForDual(const Eigen::MatrixXi primalEdges) {
+
+    cout << "Removing edges from dual graph" << endl;
+
+    int count = 0;
+
+    for(map<VertexPair, VertexPair>::iterator it = dualMap.begin(); it != dualMap.end(); it++) {
+        
+        count++;
+    }    
+
+    cout << "Map has " << count << " keys." << endl;
+
+    count = 0;
+
+    for(int i = 0; i < primalEdges.rows(); i++) {
+
+        for(int j = i; j < primalEdges.cols(); j++) {
+
+            if(primalEdges(i, j) == 1) {
+
+                count++;
+
+                bool found = false;
+
+                for(map<VertexPair, VertexPair>::iterator it = dualMap.begin(); it != dualMap.end(); it++) {
+
+                    if((it->second.first == i && it->second.second == j) || (it->second.first == j && it->second.second == i)) {
+
+                        edges(it->first.first, it->first.second) = 0;
+                        edges(it->first.second, it->first.first) = 0;
+
+                        boost::remove_edge(it->first.first, it->first.second, graph);
+
+                        found = true;
+
+                        break;
+                    }
+                }
+
+                if (!found)
+                    cout << "Did not find mapping for " << i << " " << j << endl;
+            }
+        }
+    }
+
+    cout << count << " edges removed" << endl;
+
+    cout << "After removing edges:" << endl;
+    printGraphInformatiaon();
+
+    
+    this->visualizer.vertices1 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
+    this->visualizer.vertices2 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
+
+    count = 0;
+    for(int i = 0; i < edges.rows(); i++) {
+
+        for(int j = i; j < edges.cols(); j++) {
+
+            if(edges(i, j) == 1) {
+
+                this->visualizer.vertices1.row(count) = this->vertices.row(i);
+                this->visualizer.vertices2.row(count) = this->vertices.row(j);
+
+                count++;
+            }
+        }
+    }
+
+    cout << "Updataed visualizer for " << count << " edges" << endl;
+}
+
+void Graph::removeEdges(const Eigen::MatrixXi edgesToRemove) {
+
+    cout << "Removing edges" << endl;
+
+    int count = 0;
+
+    for(int i = 0; i < edgesToRemove.rows(); i++) {
+
+        for(int j = i; j < edgesToRemove.cols(); j++) {
+
+            if(edgesToRemove(i, j) == 1) {
+
+                count++;
+
+                edges(i, j) = 0;
+                edges(j, i) = 0;
+            }
+        }
+    }
+
+    cout << count << " edges removed" << endl;
+
+    cout << "After removing edges:" << endl;
+    printGraphInformatiaon();
+
+    
+    this->visualizer.vertices1 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
+    this->visualizer.vertices2 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
+
+    count = 0;
+    for(int i = 0; i < edges.rows(); i++) {
+
+        for(int j = i; j < edges.cols(); j++) {
+
+            if(edges(i, j) == 1) {
+
+                this->visualizer.vertices1.row(count) = this->vertices.row(i);
+                this->visualizer.vertices2.row(count) = this->vertices.row(j);
+
+                count++;
+            }
+        }
+    }
+
+    cout << "Updataed visualizer for " << count << " edges" << endl;
 }
