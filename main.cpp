@@ -36,13 +36,24 @@ int main(int argc, char *argv[])
   cycles.buildGraphFromVerticesAndEdges(primal.getVertices(), primal.getEdges());
   cycles.removeEdges(tree.getEdges());
   cycles.removeEdgesForInverseDual(cotree.getEdges(), dual.getDualMap());
+  vector<VertexPair> cycleEdges = cycles.getBoostEdges();
+
+  cout << "# of edges in cycle:" << cycleEdges.size() << endl;
+
+  for(vector<VertexPair>::iterator it = cycleEdges.begin(); it != cycleEdges.end(); it++) {
+
+    vector<int> path = tree.findPathBetween(it->first, it->second, weightsPrimal);
+
+    cycles.addPath(path);
+  }
+
 
   igl::opengl::glfw::Viewer viewer;
   viewer.data().set_mesh(vertices, faces);
   viewer.data().line_width = 4.0f;
-  viewer.data().add_edges(tree.getVisualizer().vertices1, tree.getVisualizer().vertices2, Eigen::RowVector3d(1.0, 0.0, 0.0));
-  viewer.data().add_edges(cotree.getVisualizer().vertices1, cotree.getVisualizer().vertices2, Eigen::RowVector3d(0.0, 0.0, 1.0));
   viewer.data().add_edges(cycles.getVisualizer().vertices1, cycles.getVisualizer().vertices2, Eigen::RowVector3d(0.0, 1.0, 0.0));
+  //viewer.data().add_edges(tree.getVisualizer().vertices1, tree.getVisualizer().vertices2, Eigen::RowVector3d(1.0, 0.0, 0.0));
+  //viewer.data().add_edges(cotree.getVisualizer().vertices1, cotree.getVisualizer().vertices2, Eigen::RowVector3d(0.0, 0.0, 1.0));
   //viewer.data().add_edges(maxCurvatureVisualizer.vertices1, maxCurvatureVisualizer.vertices2, Eigen::RowVector3d(1.0, 0.0, 0.0));
   //viewer.data().add_edges(minCurvatureVisualizer.vertices1, minCurvatureVisualizer.vertices2, Eigen::RowVector3d(0.0, 0.0, 1.0));
   

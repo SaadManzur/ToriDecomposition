@@ -236,8 +236,6 @@ void Graph::removeEdgesForInverseDual(const Eigen::MatrixXi dualEdges, map<Verte
 
     cout << "Removing edges from primal graph" << endl;
 
-    cout << "Removing edges from dual graph" << endl;
-
     int count = 0;
 
     for(map<VertexPair, VertexPair>::iterator it = dualMap.begin(); it != dualMap.end(); it++) {
@@ -285,26 +283,7 @@ void Graph::removeEdgesForInverseDual(const Eigen::MatrixXi dualEdges, map<Verte
     cout << "After removing edges:" << endl;
     printGraphInformatiaon();
 
-    
-    this->visualizer.vertices1 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
-    this->visualizer.vertices2 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
-
-    count = 0;
-    for(int i = 0; i < edges.rows(); i++) {
-
-        for(int j = i; j < edges.cols(); j++) {
-
-            if(edges(i, j) == 1) {
-
-                this->visualizer.vertices1.row(count) = this->vertices.row(i);
-                this->visualizer.vertices2.row(count) = this->vertices.row(j);
-
-                count++;
-            }
-        }
-    }
-
-    cout << "Updataed visualizer for " << count << " edges" << endl;
+    updateVisualizer();
 }
 
 void Graph::removeEdgesForDual(const Eigen::MatrixXi primalEdges) {
@@ -358,11 +337,111 @@ void Graph::removeEdgesForDual(const Eigen::MatrixXi primalEdges) {
     cout << "After removing edges:" << endl;
     printGraphInformatiaon();
 
-    
+    updateVisualizer();
+}
+
+void Graph::removeEdges(const Eigen::MatrixXi edgesToRemove) {
+
+    cout << "Removing edges" << endl;
+
+    int count = 0;
+
+    for(int i = 0; i < edgesToRemove.rows(); i++) {
+
+        for(int j = i; j < edgesToRemove.cols(); j++) {
+
+            if(edgesToRemove(i, j) == 1) {
+
+                boost::remove_edge(i, j, graph);
+
+                count++;
+
+                edges(i, j) = 0;
+                edges(j, i) = 0;
+            }
+        }
+    }
+
+    cout << count << " edges removed" << endl;
+
+    cout << "After removing edges:" << endl;
+    printGraphInformatiaon();
+
+    updateVisualizer();
+}
+
+vector<int> Graph::findPathBetween(int source, int destination, Eigen::MatrixXd weights) {
+
+    vector<int> path;
+
+    Vertex sourceVertex = boost::vertex(source, graph);
+    Vertex destinationVertex = boost::vertex(destination, graph);
+    CustomVisitor visitor(destinationVertex);
+
+    vector<Vertex> predecessor(boost::num_vertices(graph));
+    vector<double> distances(boost::num_vertices(graph));
+
+    cout << "Assigning weights" << endl;
+
+    for(int i = 0; i < weights.rows(); i++) {
+
+        for(int j = i; j < weights.rows(); j++) {
+
+            pair<Edge, bool> edge = boost::edge(i, j, graph);
+            
+            if(edge.second) {
+
+                boost::put(boost::edge_weight_t(), graph, edge.first, weights(i, j));          
+            }
+        }
+    }
+
+    try {
+
+        boost::dijkstra_shortest_paths(graph, sourceVertex, boost::predecessor_map(&predecessor[0]).distance_map(&distances[0]).visitor(visitor));
+    }
+    catch (int exception){
+ 
+        cout << "Printing path" << endl;
+        
+        int current = destination;
+
+        cout << "Source :" << source << "Destination: " << current << endl;
+
+        while(current != source) {
+
+            path.insert(path.begin(), current);
+
+            current = predecessor[current];
+        }
+
+        path.insert(path.begin(), source);
+    }
+
+    cout << "Path detected of length " << path.size() << endl;
+
+    return path;
+}
+
+void Graph::addPath(const vector<int> path) {
+
+    for(int i = 0; i < path.size()-1; i++) {
+
+        boost::add_edge(path[i], path[i+1], graph);
+
+        edges(path[i], path[i+1]) = 1;
+        edges(path[i+1], path[i]) = 1;
+    }
+
+    updateVisualizer();
+}
+
+void Graph::updateVisualizer() {
+
     this->visualizer.vertices1 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
     this->visualizer.vertices2 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
 
-    count = 0;
+    int count = 0;
     for(int i = 0; i < edges.rows(); i++) {
 
         for(int j = i; j < edges.cols(); j++) {
@@ -380,49 +459,16 @@ void Graph::removeEdgesForDual(const Eigen::MatrixXi primalEdges) {
     cout << "Updataed visualizer for " << count << " edges" << endl;
 }
 
-void Graph::removeEdges(const Eigen::MatrixXi edgesToRemove) {
+vector<VertexPair> Graph::getBoostEdges() {
 
-    cout << "Removing edges" << endl;
+    pair<UndirectedGraph::edge_iterator, UndirectedGraph::edge_iterator> boostEdges = boost::edges(graph);
 
-    int count = 0;
+    vector<VertexPair> resultEdges;
 
-    for(int i = 0; i < edgesToRemove.rows(); i++) {
+    for(UndirectedGraph::edge_iterator it = boostEdges.first; it != boostEdges.second; it++) {
 
-        for(int j = i; j < edgesToRemove.cols(); j++) {
-
-            if(edgesToRemove(i, j) == 1) {
-
-                count++;
-
-                edges(i, j) = 0;
-                edges(j, i) = 0;
-            }
-        }
+        resultEdges.push_back(VertexPair(boost::source(*it, graph), boost::target(*it, graph)));
     }
 
-    cout << count << " edges removed" << endl;
-
-    cout << "After removing edges:" << endl;
-    printGraphInformatiaon();
-
-    
-    this->visualizer.vertices1 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
-    this->visualizer.vertices2 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
-
-    count = 0;
-    for(int i = 0; i < edges.rows(); i++) {
-
-        for(int j = i; j < edges.cols(); j++) {
-
-            if(edges(i, j) == 1) {
-
-                this->visualizer.vertices1.row(count) = this->vertices.row(i);
-                this->visualizer.vertices2.row(count) = this->vertices.row(j);
-
-                count++;
-            }
-        }
-    }
-
-    cout << "Updataed visualizer for " << count << " edges" << endl;
+    return resultEdges;
 }

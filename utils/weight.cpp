@@ -35,6 +35,7 @@ Eigen::MatrixXd computeEdgeWeights(const Eigen::MatrixXd vertices, const Eigen::
             if (edges(i, j) == 1) {
 
                 Eigen::Vector3d vector = vertices.row(j) - vertices.row(i);
+                vector = vector / vector.norm();
                 Eigen::Vector3d direction1 = directions.row(i);
                 Eigen::Vector3d direction2 = directions.row(j);
 
