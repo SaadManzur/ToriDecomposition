@@ -6,6 +6,7 @@
 
 #include "utils/readFile.h"
 #include "utils/graph.h"
+#include "utils/weight.h"
 
 using namespace std;
 
@@ -16,49 +17,27 @@ int main(int argc, char *argv[])
 
   readFile("../models/fertility.off", vertices, faces);
 
-  Eigen::MatrixXi faceAdjacency;
-  Eigen::MatrixXi edgeAdjacency;
-  
-  igl::triangle_triangle_adjacency(faces, faceAdjacency, edgeAdjacency);
+  Curvature curvature;
+  computeCurvature(vertices, faces, curvature);
+  Visualizer maxCurvatureVisualizer = getCurvatureVisualization(vertices, curvature.maximalDirection);
+  Visualizer minCurvatureVisualizer = getCurvatureVisualization(vertices, curvature.minimalDirection);
 
-  Eigen::MatrixXd faceCenters(faces.rows(), 3);
-  
-  for(int i = 0; i < faces.rows(); i++) {
+  Graph primal;
+  primal.buildGraphFromVerticesAndFaces(vertices, faces);
+  Eigen::MatrixXd weightsPrimal = computeEdgeWeights(vertices, primal.getEdges(), curvature.maximalDirection);
+  Graph primalMST = primal.buildMST(weightsPrimal);
 
-    for(int j = 0; j < 3; j++) {
-
-      faceCenters(i, j) = (vertices(faces(i, 0), j) + vertices(faces(i, 1), j) + vertices(faces(i, 2), j)) / 3.0;
-    }
-  }
-
-  Eigen::MatrixXd vertices1(faces.rows()*3 / 2, 3);
-  Eigen::MatrixXd vertices2(faces.rows()*3 / 2, 3);
-  Eigen::MatrixXi dualAdjacency = Eigen::MatrixXi::Zero(faces.rows(), faces.rows());
-
-  int count = 0;
-
-  for(int i = 0; i < faceAdjacency.rows(); i++) {
-
-    for(int j = 0; j < 3; j++) {
-
-      if(dualAdjacency(i, faceAdjacency(i, j)) == 0) {
-
-        dualAdjacency(i, faceAdjacency(i, j)) = 1;
-        dualAdjacency(faceAdjacency(i, j), i) = 1;
-
-        vertices1.row(count) = faceCenters.row(i);
-        vertices2.row(count) = faceCenters.row(faceAdjacency(i, j));
-
-        count++;
-      }
-    }
-  }
-
-  Graph graph(faceCenters, dualAdjacency);
+  Graph dual = primal.getDual();
+  Eigen::MatrixXd weightsDual = transferDualWeights(weightsPrimal, dual.getEdges(), dual.getDualMap());
+  Graph dualMST = dual.buildMST(weightsDual);
 
   igl::opengl::glfw::Viewer viewer;
   viewer.data().set_mesh(vertices, faces);
-  viewer.data().add_edges(vertices1, vertices2, Eigen::RowVector3d(1.0, 0.0, 0.0));
-  //viewer.data().add_points(faceCenters, Eigen::RowVector3d(1.0, 0.0, 0.0));
+  viewer.data().line_width = 2.0f;
+  viewer.data().add_edges(primalMST.getVisualizer().vertices1, primalMST.getVisualizer().vertices2, Eigen::RowVector3d(1.0, 0.0, 0.0));
+  viewer.data().add_edges(dualMST.getVisualizer().vertices1, dualMST.getVisualizer().vertices2, Eigen::RowVector3d(0.0, 0.0, 1.0));
+  //viewer.data().add_edges(maxCurvatureVisualizer.vertices1, maxCurvatureVisualizer.vertices2, Eigen::RowVector3d(1.0, 0.0, 0.0));
+  //viewer.data().add_edges(minCurvatureVisualizer.vertices1, minCurvatureVisualizer.vertices2, Eigen::RowVector3d(0.0, 0.0, 1.0));
+  
   viewer.launch();
 }
