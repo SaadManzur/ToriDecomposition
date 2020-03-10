@@ -61,6 +61,7 @@ public:
 
     void buildGraphFromVerticesAndFaces(const Eigen::MatrixXd vertices, const Eigen::MatrixXi faces);
     void buildGraphFromVerticesAndEdges(const Eigen::MatrixXd vertices, const Eigen::MatrixXi edges);
+    void buildGraphFromVerticesAndPaths(const Eigen::MatrixXd vertices, const vector<vector<int>> paths);
     Graph buildMST(const Eigen::MatrixXd weights);
     vector<int> findCommonVertices(int face1, int face2);
     void printGraphInformatiaon();

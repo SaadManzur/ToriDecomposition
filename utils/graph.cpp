@@ -54,7 +54,7 @@ void Graph::buildGraphFromVerticesAndFaces(const Eigen::MatrixXd vertices, const
 
     this->edges = adjacencyMatrix;
 
-    printGraphInformatiaon();
+    //printGraphInformatiaon();
 }
 
 void Graph::buildGraphFromVerticesAndEdges(const Eigen::MatrixXd vertices, const Eigen::MatrixXi edges) {
@@ -94,7 +94,17 @@ void Graph::buildGraphFromVerticesAndEdges(const Eigen::MatrixXd vertices, const
         }
     }
 
-    printGraphInformatiaon();
+    //printGraphInformatiaon();
+}
+
+void Graph::buildGraphFromVerticesAndPaths(const Eigen::MatrixXd vertices, const vector<vector<int>> paths) {
+
+    this->vertices = vertices;
+
+    for(int i = 0; i < paths.size(); i++) {
+
+        this->addPath(paths[i]);
+    }
 }
 
 void Graph::printGraphInformatiaon() {
@@ -237,16 +247,7 @@ void Graph::removeEdgesForInverseDual(const Eigen::MatrixXi dualEdges, map<Verte
     cout << "Removing edges from primal graph" << endl;
 
     int count = 0;
-
-    for(map<VertexPair, VertexPair>::iterator it = dualMap.begin(); it != dualMap.end(); it++) {
-        
-        count++;
-    }    
-
-    cout << "Map has " << count << " keys." << endl;
-
-    count = 0;
-
+    
     for(int i = 0; i < dualEdges.rows(); i++) {
 
         for(int j = i; j < dualEdges.cols(); j++) {
@@ -280,8 +281,8 @@ void Graph::removeEdgesForInverseDual(const Eigen::MatrixXi dualEdges, map<Verte
 
     cout << count << " edges removed" << endl;
 
-    cout << "After removing edges:" << endl;
-    printGraphInformatiaon();
+    //cout << "After removing edges:" << endl;
+    //printGraphInformatiaon();
 
     updateVisualizer();
 }
@@ -334,8 +335,8 @@ void Graph::removeEdgesForDual(const Eigen::MatrixXi primalEdges) {
 
     cout << count << " edges removed" << endl;
 
-    cout << "After removing edges:" << endl;
-    printGraphInformatiaon();
+    //cout << "After removing edges:" << endl;
+    //printGraphInformatiaon();
 
     updateVisualizer();
 }
@@ -381,7 +382,7 @@ vector<int> Graph::findPathBetween(int source, int destination, Eigen::MatrixXd 
     vector<Vertex> predecessor(boost::num_vertices(graph));
     vector<double> distances(boost::num_vertices(graph));
 
-    cout << "Assigning weights" << endl;
+    //cout << "Assigning weights" << endl;
 
     for(int i = 0; i < weights.rows(); i++) {
 
@@ -402,11 +403,7 @@ vector<int> Graph::findPathBetween(int source, int destination, Eigen::MatrixXd 
     }
     catch (int exception){
  
-        cout << "Printing path" << endl;
-        
         int current = destination;
-
-        cout << "Source :" << source << "Destination: " << current << endl;
 
         while(current != source) {
 
@@ -417,8 +414,6 @@ vector<int> Graph::findPathBetween(int source, int destination, Eigen::MatrixXd 
 
         path.insert(path.begin(), source);
     }
-
-    cout << "Path detected of length " << path.size() << endl;
 
     return path;
 }
@@ -456,7 +451,7 @@ void Graph::updateVisualizer() {
         }
     }
 
-    cout << "Updataed visualizer for " << count << " edges" << endl;
+    cout << "Updated visualizer for " << count << " edges" << endl;
 }
 
 vector<VertexPair> Graph::getBoostEdges() {
