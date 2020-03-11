@@ -14,8 +14,8 @@ using namespace std;
 #include "cycle.h"
 
 #define MIN_WEIGHT 0.0
-#define GOOD_THRESHOLD_MAX 4000
-#define GOOD_THRESHOLD_MIN 4000
+#define GOOD_THRESHOLD_MAX 300
+#define GOOD_THRESHOLD_MIN 300
 
 typedef struct DecompositionResult {
 

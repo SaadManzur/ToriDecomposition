@@ -100,11 +100,17 @@ void Graph::buildGraphFromVerticesAndEdges(const Eigen::MatrixXd vertices, const
 void Graph::buildGraphFromVerticesAndPaths(const Eigen::MatrixXd vertices, const vector<vector<int>> paths) {
 
     this->vertices = vertices;
+    this->edges = Eigen::MatrixXi::Zero(vertices.rows(), vertices.rows());
 
     for(int i = 0; i < paths.size(); i++) {
 
-        this->addPath(paths[i]);
+        vector<int> pathToAdd = paths[i];
+        pathToAdd.push_back(pathToAdd[0]);
+
+        this->addPath(pathToAdd);
     }
+
+    updateVisualizer();
 }
 
 void Graph::printGraphInformatiaon() {
@@ -128,6 +134,9 @@ Graph Graph::buildMST(const Eigen::MatrixXd weights) {
 
     vector<Edge> spanningTree;
 
+    double minWeight = 9000;
+    double maxWeight = -1.0;
+
     for(int i = 0; i < weights.rows(); i++) {
 
         for(int j = i; j < weights.rows(); j++) {
@@ -136,10 +145,17 @@ Graph Graph::buildMST(const Eigen::MatrixXd weights) {
             
             if(edge.second) {
 
-                boost::put(boost::edge_weight_t(), graph, edge.first, weights(i, j));          
+                boost::put(boost::edge_weight_t(), graph, edge.first, weights(i, j));
+
+                double weight = boost::get(boost::edge_weight_t(), graph, edge.first);
+
+                minWeight = (minWeight > weight)? weight:minWeight;
+                maxWeight = (maxWeight < weight)? weight:maxWeight;         
             }
         }
     }
+
+    cout << "Min weight: " << minWeight << " Max weight: " << maxWeight << endl;
 
     boost::kruskal_minimum_spanning_tree(graph, back_inserter(spanningTree));
 
@@ -292,15 +308,6 @@ void Graph::removeEdgesForDual(const Eigen::MatrixXi primalEdges) {
     cout << "Removing edges from dual graph" << endl;
 
     int count = 0;
-
-    for(map<VertexPair, VertexPair>::iterator it = dualMap.begin(); it != dualMap.end(); it++) {
-        
-        count++;
-    }    
-
-    cout << "Map has " << count << " keys." << endl;
-
-    count = 0;
 
     for(int i = 0; i < primalEdges.rows(); i++) {
 

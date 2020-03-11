@@ -7,6 +7,9 @@ void assignMinimumWeights(vector<int> path, Eigen::MatrixXd &weightMatrix) {
         weightMatrix(path[i], path[i+1]) = 0.0;
         weightMatrix(path[i+1], path[i]) = 0.0;
     }
+
+    //weightMatrix(path[0], path[path.size()-1]) = 0.0;
+    //weightMatrix(path[path.size()-1], path[0]) = 0.0;
 }
 
 vector<vector<int>> decomposeIntoTori(Eigen::MatrixXd vertices, Eigen::MatrixXi faces) {
@@ -21,10 +24,6 @@ vector<vector<int>> decomposeIntoTori(Eigen::MatrixXd vertices, Eigen::MatrixXi 
     Eigen::MatrixXd weightsPrimalMax = computeEdgeWeights(vertices, primal.getEdges(), curvature.maximalDirection);
     Eigen::MatrixXd weightsPrimalMin = computeEdgeWeights(vertices, primal.getEdges(), curvature.minimalDirection);
 
-    Graph dual = primal.getDual();
-    Eigen::MatrixXd weightsDualMax = transferDualWeights(weightsPrimalMax, dual.getEdges(), dual.getDualMap());
-    Eigen::MatrixXd weightsDualMin = transferDualWeights(weightsPrimalMin, dual.getEdges(), dual.getDualMap());
-
     int genus = (2 - vertices.rows() + primal.getBoostEdges().size() - faces.rows())/2;
     int maxIteration = 5*genus;
 
@@ -33,37 +32,50 @@ vector<vector<int>> decomposeIntoTori(Eigen::MatrixXd vertices, Eigen::MatrixXi 
 
     cout << "Object genus: " << genus << endl;
 
-    while(goodCycles.size() < 2*genus || iterationCounter < maxIteration) {
+    int prevCycleCount = 0;
 
-        cout << "Iteration " << iterationCounter << endl;
+    double threshold = GOOD_THRESHOLD_MAX;
+
+    while(goodCycles.size() < 2*genus && iterationCounter < maxIteration) {
+
+        Graph dual;
+
+        cout << "Iteration " << iterationCounter;
 
         goodCycles.clear();
 
         Graph tree, cotree;
         Eigen::MatrixXd weights;
-        double threshold;
 
-        if (iterationCounter % 2) {
+        if (iterationCounter % 2 == 0) {
             
+            cout << " ================================================= MAX" << endl;
+
             weights = weightsPrimalMax;
+            cout << "Building tree ..." << endl;
             tree = primal.buildMST(weightsPrimalMax);
 
-            Graph dual = primal.getDual();
+            dual = primal.getDual();
             dual.removeEdgesForDual(tree.getEdges());
-            cotree = dual.buildMST(weightsDualMax);
 
-            threshold = GOOD_THRESHOLD_MAX;
+            Eigen::MatrixXd weightsDualMax = transferDualWeights(weightsPrimalMax, dual.getEdges(), dual.getDualMap());
+            cout << "Building cotree ..." << endl;
+            cotree = dual.buildMST(weightsDualMax);
         }
         else {
 
+            cout << " ================================================= MIN" << endl;
+
             weights = weightsPrimalMin;
+            cout << "Building tree ..." << endl;
             tree = primal.buildMST(weightsPrimalMin);
 
-            Graph dual = primal.getDual();
+            dual = primal.getDual();
             dual.removeEdgesForDual(tree.getEdges());
-            cotree = dual.buildMST(weightsDualMin);
 
-            threshold = GOOD_THRESHOLD_MIN;
+            Eigen::MatrixXd weightsDualMin = transferDualWeights(weightsPrimalMin, dual.getEdges(), dual.getDualMap());
+            cout << "Building cotree ..." << endl;
+            cotree = dual.buildMST(weightsDualMin);
         }
 
         Graph cycles;
@@ -79,8 +91,10 @@ vector<vector<int>> decomposeIntoTori(Eigen::MatrixXd vertices, Eigen::MatrixXi 
             vector<int> path = tree.findPathBetween(it->first, it->second, weights);
 
             Cycle newCycle = Cycle(cycles.getVertices(), path);
-            cycleCostPair.push_back(pair<Cycle, double>(newCycle, newCycle.getCycleCost()));
+            cycleCostPair.push_back(pair<Cycle, double>(newCycle, newCycle.getCycleCost(0.0)));
         }
+
+        sortCycles(cycleCostPair);
 
         cout << "Testing against threshold: " << threshold << endl;
 
@@ -88,19 +102,29 @@ vector<vector<int>> decomposeIntoTori(Eigen::MatrixXd vertices, Eigen::MatrixXi 
 
             cout << cycleCostPair[i].second << endl;
 
-            if (cycleCostPair[i].second < threshold) {
+            if (cycleCostPair[i].second < threshold && goodCycles.size() < 2*genus) {
 
                 vector<int> result = cycleCostPair[i].first.getPath();
                 goodCycles.push_back(result);
 
                 assignMinimumWeights(result, weightsPrimalMax);
-                assignMinimumWeights(result, weightsDualMax);
                 assignMinimumWeights(result, weightsPrimalMin);
-                assignMinimumWeights(result, weightsDualMin);
+            }
+            else {
+                break;
             }
         }
 
         iterationCounter++;
+
+        if(prevCycleCount >= goodCycles.size()) {
+
+            threshold *= 1.2;
+
+            cout << "Raising threshold to " << threshold << endl;
+        }
+        
+        prevCycleCount = goodCycles.size();
 
         cout << "Found " << goodCycles.size() << " good cycles" << endl;
     }

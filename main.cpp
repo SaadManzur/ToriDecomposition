@@ -31,7 +31,7 @@ int main(int argc, char *argv[])
   primal.buildGraphFromVerticesAndFaces(vertices, faces);
   int genus = (2 - vertices.rows() + primal.getBoostEdges().size() - faces.rows())/2;
 
-  Eigen::MatrixXd weightsPrimal = computeEdgeWeights(vertices, primal.getEdges(), curvature.maximalDirection);
+  Eigen::MatrixXd weightsPrimal = computeEdgeWeights(vertices, primal.getEdges(), curvature.minimalDirection);
   Graph tree = primal.buildMST(weightsPrimal);
 
   Graph dual = primal.getDual();

@@ -28,6 +28,9 @@ Eigen::MatrixXd computeEdgeWeights(const Eigen::MatrixXd vertices, const Eigen::
 
     Eigen::MatrixXd weights = Eigen::MatrixXd::Zero(edges.rows(), edges.cols());
 
+    double minWeight = 9000;
+    double maxWeight = -1.0;
+
     for(int i = 0; i < edges.rows(); i++) {
 
         for(int j = i; j < edges.rows(); j++) {
@@ -39,13 +42,18 @@ Eigen::MatrixXd computeEdgeWeights(const Eigen::MatrixXd vertices, const Eigen::
                 Eigen::Vector3d direction1 = directions.row(i);
                 Eigen::Vector3d direction2 = directions.row(j);
 
-                double product1 = abs(vector.dot(direction1));
-                double product2 = abs(vector.dot(direction2));
+                double product1 = acos(abs(vector.dot(direction1)));
+                double product2 = acos(abs(vector.dot(direction2)));
 
                 weights(i, j) = (product1 + product2) / 2.0;
+
+                minWeight = (minWeight > weights(i, j))? weights(i, j):minWeight;
+                maxWeight = (maxWeight < weights(i, j))? weights(i, j):maxWeight;
             }
         }
     }
+
+    cout << "Min weight: " << minWeight << " Max weight: " << maxWeight << endl;
 
     return weights;
 }
@@ -67,7 +75,7 @@ Eigen::MatrixXd transferDualWeights(const Eigen::MatrixXd primalEdgeWeights, con
         }
     }
 
-    cout << "Weights computed" << endl;
+    //cout << "Weights computed" << endl;
 
     return weights;
 }
