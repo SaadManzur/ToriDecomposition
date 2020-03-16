@@ -1,4 +1,5 @@
 #include <iostream>
+#include <igl/writeOBJ.h>
 #include <igl/opengl/glfw/Viewer.h>
 /*
 #include <igl/triangle_triangle_adjacency.h>
@@ -9,75 +10,147 @@
 #include "utils/readFile.h"
 #include "utils/graph.h"
 #include "utils/weight.h"
-#include "utils/cycle.h"
-#include "utils/toriDecomposition.h"
 
 using namespace std;
 
-int main(int argc, char *argv[])
-{
-  Eigen::MatrixXd vertices;
-  Eigen::MatrixXi faces;
+Eigen::RowVector3d COLOR_RED = Eigen::RowVector3d(0.9, 0.05, 0.05);
+Eigen::RowVector3d COLOR_BLUE = Eigen::RowVector3d(0.05, 0.05, 0.9);
+Eigen::RowVector3d COLOR_GREEN = Eigen::RowVector3d(0.05, 0.9, 0.05);
 
-  readFile("../models/fertility.off", vertices, faces);
+Eigen::MatrixXd vertices;
+Eigen::MatrixXi faces;
+Graph graph;
+vector<Edge> tree;
+vector<Edge> cotree;
+vector<Edge> remainingEdges;
+Graph cycleGraph;
 
-  /*
-  Curvature curvature;
-  computeCurvature(vertices, faces, curvature);
-  Visualizer maxCurvatureVisualizer = getCurvatureVisualization(vertices, curvature.maximalDirection);
-  Visualizer minCurvatureVisualizer = getCurvatureVisualization(vertices, curvature.minimalDirection);
+bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier) {
 
-  Graph primal;
-  primal.buildGraphFromVerticesAndFaces(vertices, faces);
-  int genus = (2 - vertices.rows() + primal.getBoostEdges().size() - faces.rows())/2;
+  if(key == '1') {
 
-  Eigen::MatrixXd weightsPrimal = computeEdgeWeights(vertices, primal.getEdges(), curvature.minimalDirection);
-  Graph tree = primal.buildMST(weightsPrimal);
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().line_width = 2.0f;
+    viewer.core().align_camera_center(vertices, faces);
 
-  Graph dual = primal.getDual();
-  dual.removeEdgesForDual(tree.getEdges());
-  Eigen::MatrixXd weightsDual = transferDualWeights(weightsPrimal, dual.getEdges(), dual.getDualMap());
-  Graph cotree = dual.buildMST(weightsDual);
+  }
+  else if(key == '2') {
 
-  Graph cycles;
-  cycles.buildGraphFromVerticesAndEdges(primal.getVertices(), primal.getEdges());
-  cycles.removeEdges(tree.getEdges());
-  cycles.removeEdgesForInverseDual(cotree.getEdges(), dual.getDualMap());
-  vector<VertexPair> cycleEdges = cycles.getBoostEdges();
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().show_lines = false;
+    viewer.data().add_edges(graph.getPrimalVisualizer().vertices1, graph.getPrimalVisualizer().vertices2, Eigen::RowVector3d(0.9, 0.1, 0.1));
+    viewer.data().add_edges(graph.getDualVisualizer().vertices1, graph.getDualVisualizer().vertices2, Eigen::RowVector3d(0.1, 0.1, 0.9));
+    viewer.data().line_width = 2.0f;
+    viewer.core().align_camera_center(vertices, faces);
+  }
+  else if(key == '3') {
 
-  cout << "# of edges in cycle:" << cycleEdges.size() << endl;
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().show_lines = true;
+    viewer.data().add_points(graph.getDualVerticesAsMatrix(), Eigen::RowVector3d(0.0, 0.0, 1.0));
+    viewer.data().point_size = 3.0f;
+    viewer.core().align_camera_center(vertices, faces);
+  }
+  else if(key == '4') {
 
-  vector<pair<Cycle, double>> cycleCostPair;
+    pair<Visualizer, Visualizer> randomVisualizers = graph.getRandomPrimalAndDualVisualizer(1);
 
-  for(vector<VertexPair>::iterator it = cycleEdges.begin(); it != cycleEdges.end(); it++) {
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().show_lines = false;
+    viewer.data().add_edges(randomVisualizers.first.vertices1, randomVisualizers.first.vertices2, Eigen::RowVector3d(0.9, 0.1, 0.1));
+    viewer.data().add_edges(randomVisualizers.second.vertices1, randomVisualizers.second.vertices2, Eigen::RowVector3d(0.1, 0.1, 0.9));
+    viewer.data().line_width = 2.0f;
+    viewer.core().align_camera_center(vertices, faces);
+  }
+  else if(key == '5') {
 
-    vector<int> path = tree.findPathBetween(it->first, it->second, weightsPrimal);
+    Visualizer treeVisualizer = graph.getTreeVisualizer(tree);
+    Visualizer cotreeVisualizer = graph.getCotreeVisualizer(cotree);
 
-    Cycle newCycle = Cycle(cycles.getVertices(), path);
-    cycleCostPair.push_back(pair<Cycle, double>(newCycle, newCycle.getCycleCost()));
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().show_lines = false;
+    viewer.data().add_edges(treeVisualizer.vertices1, treeVisualizer.vertices2, Eigen::RowVector3d(0.9, 0.1, 0.1));
+    viewer.data().add_edges(cotreeVisualizer.vertices1, cotreeVisualizer.vertices2, Eigen::RowVector3d(0.1, 0.1, 0.9));
+    viewer.data().line_width = 2.0f;
+    viewer.core().align_camera_center(vertices, faces);
+  }
+  else if(key == '6') {
+
+    Visualizer treeVisualizer = graph.getTreeVisualizer(tree);
+    Visualizer remainingVisualizer = graph.getTreeVisualizer(remainingEdges);
+
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().show_lines = false;
+    viewer.data().add_edges(treeVisualizer.vertices1, treeVisualizer.vertices2, Eigen::RowVector3d(0.9, 0.1, 0.1));
+    viewer.data().add_edges(remainingVisualizer.vertices1, remainingVisualizer.vertices2, Eigen::RowVector3d(0.1, 0.9, 0.1));
+    viewer.data().line_width = 2.0f;
+    viewer.core().align_camera_center(vertices, faces);
+  }
+  else if(key == '7') {
+
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().show_lines = false;
+    viewer.data().add_edges(cycleGraph.getPrimalVisualizer().vertices1, cycleGraph.getPrimalVisualizer().vertices2, Eigen::RowVector3d(0.1, 0.9, 0.1));
+    viewer.data().add_points(graph.getVerticesForEdge(remainingEdges[0]), Eigen::RowVector3d(0.9, 0.1, 0.1));
+    viewer.data().line_width = 2.0f;
+    viewer.data().point_size = 8.0f;
+    viewer.core().align_camera_center(vertices, faces);
+  }
+  else if(key == '8') {
+
+    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraph.findPathBetweenSourceAndTarget();
+
+    Visualizer cycleVisualizer = Graph::getCycleVisualizer(path.first, path.second);
+
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().show_lines = false;
+    viewer.data().add_edges(cycleVisualizer.vertices1, cycleVisualizer.vertices2, COLOR_GREEN);
+    viewer.data().add_points(cycleGraph.getSourceAndTarget(), COLOR_RED);
+    viewer.data().line_width = 2.0f;
+    viewer.data().point_size = 8.0f;
+    viewer.core().align_camera_center(vertices, faces);
   }
 
-  sortCycles(cycleCostPair);
+  return false;
+}
 
-  Graph selectedCycles;
-  selectedCycles.buildGraphFromVerticesAndEdges(primal.getVertices(), Eigen::MatrixXi::Zero(primal.getVertices().rows(), primal.getVertices().rows()));
-  selectedCycles.addPath(cycleCostPair[0].first.getPath());
-  */
+int main(int argc, char *argv[]) {
 
-  vector<vector<int>> paths = decomposeIntoTori(vertices, faces);
+  readFile("../models/fertility.off", vertices, faces);
+  
+  graph.buildGraphFromVerticesAndFaces(vertices, faces);
+  
+  Curvature curvature;
+  computeCurvature(vertices, faces, curvature);
+  map<Edge, double> minCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.minimalDirection);
+  map<Edge, double> maxCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.maximalDirection);
 
-  Graph selectedCycles;
-  selectedCycles.buildGraphFromVerticesAndPaths(vertices, paths);
+  vector<Edge> edgesToRemove;
+  tree = graph.buildTree(edgesToRemove, minCost);
+  cotree = graph.buildCotree(tree, minCost);
+
+  cout << "Tree edges (#): " << tree.size() << endl;
+  cout << "Cotree edges (#): " << cotree.size() << endl;
+
+  remainingEdges = graph.remainingEdges(tree, cotree);
+
+  cycleGraph.buildGraphFromVerticesAndEdges(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), tree, remainingEdges[0]);
+
+  cout << "Cycle graph edges (#): " << boost::num_edges(cycleGraph.getPrimalBoostGraph()) << endl;
+  cout << "Cycle graph vertices (#): " << boost::num_vertices(cycleGraph.getPrimalBoostGraph()) << endl;
 
   igl::opengl::glfw::Viewer viewer;
   viewer.data().set_mesh(vertices, faces);
-  viewer.data().line_width = 4.0f;
-  //viewer.data().add_edges(cycles.getVisualizer().vertices1, cycles.getVisualizer().vertices2, Eigen::RowVector3d(0.0, 1.0, 0.0));
-  viewer.data().add_edges(selectedCycles.getVisualizer().vertices1, selectedCycles.getVisualizer().vertices2, Eigen::RowVector3d(0.90, 0.08, 0.02));
-  //viewer.data().add_edges(tree.getVisualizer().vertices1, tree.getVisualizer().vertices2, Eigen::RowVector3d(1.0, 0.0, 0.0));
-  //viewer.data().add_edges(cotree.getVisualizer().vertices1, cotree.getVisualizer().vertices2, Eigen::RowVector3d(0.0, 0.0, 1.0));
-  //viewer.data().add_edges(maxCurvatureVisualizer.vertices1, maxCurvatureVisualizer.vertices2, Eigen::RowVector3d(1.0, 0.0, 0.0));
-  //viewer.data().add_edges(minCurvatureVisualizer.vertices1, minCurvatureVisualizer.vertices2, Eigen::RowVector3d(0.0, 0.0, 1.0));
+  viewer.callback_key_down = &keyDown;
+  viewer.data().line_width = 2.0f;
   
   viewer.launch();
 }

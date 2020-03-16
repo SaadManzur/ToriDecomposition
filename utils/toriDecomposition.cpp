@@ -1,5 +1,6 @@
 #include "toriDecomposition.h"
 
+/*
 void assignMinimumWeights(vector<int> path, Eigen::MatrixXd &weightMatrix) {
 
     for(int i = 0; i < path.size()-1; i++) {
@@ -132,3 +133,4 @@ vector<vector<int>> decomposeIntoTori(Eigen::MatrixXd vertices, Eigen::MatrixXi 
     
     return goodCycles;
 }
+*/

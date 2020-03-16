@@ -24,36 +24,40 @@ Visualizer getCurvatureVisualization(const Eigen::MatrixXd vertices, const Eigen
     return visualizer;
 }
 
-Eigen::MatrixXd computeEdgeWeights(const Eigen::MatrixXd vertices, const Eigen::MatrixXi edges, const Eigen::MatrixXd directions) {
+map<Edge, double> computeEdgeWeights(
+    
+        UndirectedGraph graph,
+        map<Vertex, Eigen::RowVector3d> vertices,
+        pair<EdgeIterator, EdgeIterator> edges,
+        const Eigen::MatrixXd directions
+    ) {
 
-    Eigen::MatrixXd weights = Eigen::MatrixXd::Zero(edges.rows(), edges.cols());
+    map<Edge, double> weights;
 
     double minWeight = 9000;
     double maxWeight = -1.0;
 
-    for(int i = 0; i < edges.rows(); i++) {
+    for(EdgeIterator it = edges.first; it != edges.second; it++) {
 
-        for(int j = i; j < edges.rows(); j++) {
+        Vertex source, target;
+        source = boost::source(*it, graph);
+        target = boost::target(*it, graph);
 
-            if (edges(i, j) == 1) {
+        Eigen::Vector3d vector = vertices[target] - vertices[source];
+        vector = vector / vector.norm();
+        Eigen::Vector3d direction1 = directions.row(source);
+        Eigen::Vector3d direction2 = directions.row(target);
 
-                Eigen::Vector3d vector = vertices.row(j) - vertices.row(i);
-                vector = vector / vector.norm();
-                Eigen::Vector3d direction1 = directions.row(i);
-                Eigen::Vector3d direction2 = directions.row(j);
+        double product1 = acos(abs(vector.dot(direction1)));
+        double product2 = acos(abs(vector.dot(direction2)));
 
-                double product1 = acos(abs(vector.dot(direction1)));
-                double product2 = acos(abs(vector.dot(direction2)));
+        weights.insert(pair<Edge, double>(*it, (product1 + product2) / 2.0));
 
-                weights(i, j) = (product1 + product2) / 2.0;
-
-                minWeight = (minWeight > weights(i, j))? weights(i, j):minWeight;
-                maxWeight = (maxWeight < weights(i, j))? weights(i, j):maxWeight;
-            }
-        }
+        minWeight = (minWeight > weights[*it])? weights[*it]: minWeight;
+        maxWeight = (maxWeight < weights[*it])? weights[*it]: maxWeight;
     }
 
-    cout << "Min weight: " << minWeight << " Max weight: " << maxWeight << endl;
+    cout << "(Weight Compute) Min weight: " << minWeight << " Max weight: " << maxWeight << endl;
 
     return weights;
 }
@@ -61,6 +65,9 @@ Eigen::MatrixXd computeEdgeWeights(const Eigen::MatrixXd vertices, const Eigen::
 Eigen::MatrixXd transferDualWeights(const Eigen::MatrixXd primalEdgeWeights, const Eigen::MatrixXi dualEdges, map<pair<int, int>, pair<int, int>> dualMap) {
 
     Eigen::MatrixXd weights = Eigen::MatrixXd::Zero(dualEdges.rows(), dualEdges.cols());
+
+    double minWeight = 9000;
+    double maxWeight = -1.0;
 
     for(int i = 0; i < dualEdges.rows(); i++) {
 
@@ -71,11 +78,14 @@ Eigen::MatrixXd transferDualWeights(const Eigen::MatrixXd primalEdgeWeights, con
                 pair<int, int> mappedPrimalEdge = dualMap[pair<int, int>(i, j)];
 
                 weights(i, j) = primalEdgeWeights(mappedPrimalEdge.first, mappedPrimalEdge.second);
+
+                minWeight = (minWeight > weights(i, j))? weights(i, j):minWeight;
+                maxWeight = (maxWeight < weights(i, j))? weights(i, j):maxWeight;
             }
         }
     }
 
-    //cout << "Weights computed" << endl;
+    cout << "(Weight Transfer) Min weight: " << minWeight << " Max weight: " << maxWeight << endl;
 
     return weights;
 }

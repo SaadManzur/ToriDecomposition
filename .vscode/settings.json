@@ -2,6 +2,8 @@
     "files.associations": {
         "iostream": "cpp",
         "complex": "cpp",
-        "alignedvector3": "cpp"
+        "alignedvector3": "cpp",
+        "*.tcc": "cpp",
+        "type_traits": "cpp"
     }
 }

@@ -2,475 +2,517 @@
 
 Graph::Graph() {
 
+    srand(time(NULL));
+}
+
+void Graph::buildGraphFromVerticesAndEdges(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, vector<Edge> edges, Edge edgeToAdd) {
+    
+    map<Vertex, Vertex> originalToTemp;
+
+    Vertex sourceFromOriginal = boost::source(edgeToAdd, this->graph);
+    Vertex targetFromOriginal = boost::target(edgeToAdd, this->graph);
+
+    edges.push_back(edgeToAdd);
+
+    this->primalVisualizer.vertices1 = Eigen::MatrixXd::Zero(edges.size(), 3);
+    this->primalVisualizer.vertices2 = Eigen::MatrixXd::Zero(edges.size(), 3);
+
+    int index = 0;
+
+    for(vector<Edge>::iterator it = edges.begin(); it != edges.end(); it++, index++) {
+
+        double weight = boost::get(boost::edge_weight_t(), graph, *it);
+
+        Vertex source = boost::source(*it, graph);
+        Vertex target = boost::target(*it, graph);
+
+        Vertex newSource, newTarget;
+
+        if(originalToTemp.find(source) == originalToTemp.end()) {
+
+            newSource = boost::add_vertex(this->graph);
+
+            this->vertices.insert(pair<Vertex, Eigen::RowVector3d>(newSource, vertices[source]));
+
+            originalToTemp.insert(pair<Vertex, Vertex>(source, newSource));
+        }
+        else {
+
+            newSource = originalToTemp[source];
+        }
+
+        if(originalToTemp.find(target) == originalToTemp.end()) {
+
+            newTarget = boost::add_vertex(this->graph);
+
+            this->vertices.insert(pair<Vertex, Eigen::RowVector3d>(newTarget, vertices[target]));
+
+            originalToTemp.insert(pair<Vertex, Vertex>(target, newTarget));
+        }
+        else {
+
+            newTarget = originalToTemp[target];
+        }
+
+        pair<Edge, bool> newEdge = boost::add_edge(newSource, newTarget, this->graph);
+
+        this->primalVisualizer.vertices1.row(index) = this->vertices[newSource];
+        this->primalVisualizer.vertices2.row(index) = this->vertices[newTarget];
+
+        if( newEdge.second )
+            boost::put(boost::edge_weight_t(), this->graph, newEdge.first, weight);
+    }
+
+    this->source = originalToTemp[sourceFromOriginal];
+    this->target = originalToTemp[targetFromOriginal];
 }
 
 void Graph::buildGraphFromVerticesAndFaces(const Eigen::MatrixXd vertices, const Eigen::MatrixXi faces) {
 
-    this->vertices = vertices;
-    this->faces = faces;
-
-    vector<vector<int>> adjacencyList;    
-    igl::adjacency_list(faces, adjacencyList);
-    Eigen::MatrixXi adjacencyMatrix = Eigen::MatrixXi::Zero(vertices.rows(), vertices.rows());
-
-    this->visualizer.vertices1 = Eigen::MatrixXd::Zero(adjacencyList.size()*100, vertices.cols());
-    this->visualizer.vertices2 = Eigen::MatrixXd::Zero(adjacencyList.size()*100, vertices.cols());
-
     int totalDegree = 0;
 
-    for(int i = 0; i < adjacencyList.size(); i++) {
-
-        for(int j = 0; j < adjacencyList[i].size(); j++) {
-
-            if(adjacencyMatrix(i, adjacencyList[i][j]) == 0) {
-
-                boost::add_edge(i, adjacencyList[i][j], graph);
-                
-                adjacencyMatrix(i, adjacencyList[i][j]) = 1;
-                adjacencyMatrix(adjacencyList[i][j], i) = 1;
-                
-                totalDegree++;
-            }
-        }
-    }
-
-    this->visualizer.vertices1 = Eigen::MatrixXd::Zero(totalDegree, vertices.cols());
-    this->visualizer.vertices2 = Eigen::MatrixXd::Zero(totalDegree, vertices.cols());
-
-    int index = 0;
+    cout << "Adding vertices" << endl;
 
     for(int i = 0; i < vertices.rows(); i++) {
 
-        for(int j = i; j < vertices.rows(); j++) {
+        Vertex addedVertex = boost::add_vertex(graph);
+        this->vertices.insert(pair<Vertex, Eigen::RowVector3d>(addedVertex, vertices.row(i)));
+    }
 
-            if(adjacencyMatrix(i, j) == 1) {
-                this->visualizer.vertices1.row(index) = vertices.row(i);
-                this->visualizer.vertices2.row(index) = vertices.row(j);
+    cout << "Adding faces and dual vertices" << endl;
+    for(int i = 0; i < faces.rows(); i++) {
 
-                index++;
-            }
+        Eigen::RowVector3d centroid = Eigen::RowVector3d::Zero();
+
+        pair<Edge, bool> edge1 = boost::add_edge(faces(i, 0), faces(i, 1), graph);
+        pair<Edge, bool> edge2 = boost::add_edge(faces(i, 1), faces(i, 2), graph);
+        pair<Edge, bool> edge3 = boost::add_edge(faces(i, 2), faces(i, 0), graph);
+
+        vector<int> faceList;
+        faceList.push_back(i);
+
+        if(edge1.second) {
+
+            primalEdgeDualVerticesMap.insert(pair<Edge, vector<int>>(edge1.first, faceList));
+        }
+        else {
+
+            primalEdgeDualVerticesMap[edge1.first].push_back(i);
+        }
+
+        if(edge2.second) {
+
+            primalEdgeDualVerticesMap.insert(pair<Edge, vector<int>>(edge2.first, faceList));
+        }
+        else {
+
+            primalEdgeDualVerticesMap[edge2.first].push_back(i);
+        }
+
+        if(edge3.second) {
+
+            primalEdgeDualVerticesMap.insert(pair<Edge, vector<int>>(edge3.first, faceList));
+        }
+        else {
+
+            primalEdgeDualVerticesMap[edge3.first].push_back(i);
+        }
+
+        for(int j = 0; j < 3; j++) {
+
+            centroid(j) = (vertices(faces(i, 0), j) + vertices(faces(i, 1), j) + vertices(faces(i, 2), j)) / 3.0;
+        }
+
+        Vertex addedDualVertex = boost::add_vertex(dual);
+        this->dualVertices.insert(pair<Vertex, Eigen::RowVector3d>(addedDualVertex, centroid));
+    }
+
+    
+    cout << "Updating dual map" << endl;
+    for(map<Edge, vector<int>>::iterator it = primalEdgeDualVerticesMap.begin(); it != primalEdgeDualVerticesMap.end(); it++) {
+
+        assert(it->second.size() == 2);
+
+        pair<Edge, bool> newEdge = boost::add_edge(primalEdgeDualVerticesMap[it->first][0], primalEdgeDualVerticesMap[it->first][1], dual);
+
+        if(newEdge.second) {
+
+            primalToDual.insert(pair<Edge, Edge> (it->first, newEdge.first));
+            dualToPrimal.insert(pair<Edge, Edge> (newEdge.first, it->first));
         }
     }
 
-    this->edges = adjacencyMatrix;
+    assert(boost::num_edges(graph) == boost::num_edges(dual));
 
-    //printGraphInformatiaon();
-}
+    this->primalVisualizer.vertices1 = Eigen::MatrixXd::Zero(boost::num_edges(graph)*2, vertices.cols());
+    this->primalVisualizer.vertices2 = Eigen::MatrixXd::Zero(boost::num_edges(graph)*2, vertices.cols());
+    this->dualVisualizer.vertices1 = Eigen::MatrixXd::Zero(boost::num_edges(dual)*2, 3);
+    this->dualVisualizer.vertices2 = Eigen::MatrixXd::Zero(boost::num_edges(dual)*2, 3);
 
-void Graph::buildGraphFromVerticesAndEdges(const Eigen::MatrixXd vertices, const Eigen::MatrixXi edges) {
+    map<Vertex, Eigen::RowVector3d>::iterator it1, it2;
 
-    this->vertices = vertices;
-    this->edges = edges;
-    int totalDegree = 0;
 
-    for(int i = 0; i < edges.rows(); i++) {
-
-        for(int j = i; j < edges.cols(); j++) {
-
-            if(edges(i, j) == 1) {
-                
-                boost::add_edge(i, j, graph);
-                totalDegree++;
-            }
-        }
-    }
-
-    this->visualizer.vertices1 = Eigen::MatrixXd::Zero(totalDegree, 3);
-    this->visualizer.vertices2 = Eigen::MatrixXd::Zero(totalDegree, 3);
+    cout << "Updating visualizer" << endl;
+    EdgeIterator ei, eiEnd;
 
     int count = 0;
 
-    for(int i = 0; i < edges.rows(); i++) {
+    for(tie(ei, eiEnd) = boost::edges(graph); ei != eiEnd; ei++) {
 
-        for(int j = i; j < edges.cols(); j++) {
+        Vertex source1, target1, source2, target2;
 
-            if(edges(i, j) == 1) {
+        source1 = boost::source(*ei, graph);
+        target1 = boost::target(*ei, graph);
 
-                this->visualizer.vertices1.row(count) = vertices.row(i);
-                this->visualizer.vertices2.row(count) = vertices.row(j);
+        Edge dualEdge = primalToDual[*ei];
 
-                count++;
-            }
-        }
+        source2 = boost::source(dualEdge, dual);
+        target2 = boost::target(dualEdge, dual);
+
+        this->primalVisualizer.vertices1.row(count) = this->vertices[source1];
+        this->primalVisualizer.vertices2.row(count) = this->vertices[target1];
+
+        this->dualVisualizer.vertices1.row(count) = this->dualVertices[source2];
+        this->dualVisualizer.vertices2.row(count) = this->dualVertices[target2];
+
+        count++;
     }
+
+    cout << "Graph constructed" << endl;
+    cout << "Edges: " << boost::num_edges(graph) << endl;
+    cout << "Vertices: " << boost::num_vertices(graph) << endl;
 
     //printGraphInformatiaon();
 }
 
-void Graph::buildGraphFromVerticesAndPaths(const Eigen::MatrixXd vertices, const vector<vector<int>> paths) {
+Visualizer Graph::getPrimalVisualizer() {
 
-    this->vertices = vertices;
-    this->edges = Eigen::MatrixXi::Zero(vertices.rows(), vertices.rows());
+    return this->primalVisualizer;
+}
 
-    for(int i = 0; i < paths.size(); i++) {
+Visualizer Graph::getDualVisualizer() {
 
-        vector<int> pathToAdd = paths[i];
-        pathToAdd.push_back(pathToAdd[0]);
+    return this->dualVisualizer;
+}
 
-        this->addPath(pathToAdd);
+Eigen::MatrixXd Graph::getPrimalVerticesAsMatrix() {
+
+    Eigen::MatrixXd primalVerticesMatrix = Eigen::MatrixXd::Zero(boost::num_vertices(graph), 3);
+
+    map<Vertex, Eigen::RowVector3d>::iterator it;
+
+    int index = 0;
+
+    for(it = vertices.begin(); it != vertices.end(); it++) {
+
+        primalVerticesMatrix.row(index++) = it->second;
     }
 
-    updateVisualizer();
+    return primalVerticesMatrix;
 }
 
-void Graph::printGraphInformatiaon() {
+Eigen::MatrixXd Graph::getDualVerticesAsMatrix() {
 
-    cout << "Graph constructed with" << endl;
-    cout << "\tVertices (#): " << boost::num_vertices(graph) << endl;
-    cout << "\tEdges (#) :" << boost::num_edges(graph) << endl;
+    assert(boost::num_vertices(dual) != 0);
+
+    Eigen::MatrixXd dualVerticesMatrix = Eigen::MatrixXd::Zero(boost::num_vertices(dual), 3);
+
+    map<Vertex, Eigen::RowVector3d>::iterator it;
+
+    int index = 0;
+
+    for(it = dualVertices.begin(); it != dualVertices.end(); it++) {
+
+        dualVerticesMatrix.row(index++) = it->second;
+    }
+
+    return dualVerticesMatrix;
 }
 
-Eigen::MatrixXi Graph::getEdges() {
+pair<Visualizer, Visualizer> Graph::getRandomPrimalAndDualVisualizer(int count) {
 
-    return this->edges;
+    assert(boost::num_vertices(dual) != 0);
+
+    Visualizer randomPrimalVisualizer, randomDualVisualizer;
+
+    randomPrimalVisualizer.vertices1 = Eigen::MatrixXd::Zero(count, 3);
+    randomPrimalVisualizer.vertices2 = Eigen::MatrixXd::Zero(count, 3);
+    randomDualVisualizer.vertices1 = Eigen::MatrixXd::Zero(count, 3);
+    randomDualVisualizer.vertices2 = Eigen::MatrixXd::Zero(count, 3);
+
+    EdgeIterator ei, eiEnd;
+
+    int index = 0;
+
+    double probability = count / boost::num_edges(graph);
+
+    for(tie(ei, eiEnd) = boost::edges(graph); ei != eiEnd && index < count; ei++) {
+
+        double randomNumber = (rand() % 100)/100.0;
+
+        if(randomNumber > probability) {
+
+            continue;
+        }
+
+        Vertex source1, target1, source2, target2;
+
+        source1 = boost::source(*ei, graph);
+        target1 = boost::target(*ei, graph);
+
+        Edge dualEdge = primalToDual[*ei];
+
+        source2 = boost::source(dualEdge, dual);
+        target2 = boost::target(dualEdge, dual);
+
+        randomPrimalVisualizer.vertices1.row(index) = this->vertices[source1];
+        randomPrimalVisualizer.vertices2.row(index) = this->vertices[target1];
+
+        randomDualVisualizer.vertices1.row(index) = this->dualVertices[source2];
+        randomDualVisualizer.vertices2.row(index) = this->dualVertices[target2];
+
+        index++;
+    }
+
+    return pair<Visualizer, Visualizer>(randomPrimalVisualizer, randomDualVisualizer);
 }
 
-Eigen::MatrixXd Graph::getVertices() {
+pair<EdgeIterator, EdgeIterator> Graph::getPrimalEdges() {
+
+    return boost::edges(graph);
+}
+
+map<Vertex, Eigen::RowVector3d> Graph::getPrimalVertices() {
 
     return this->vertices;
 }
 
-Graph Graph::buildMST(const Eigen::MatrixXd weights) {
+UndirectedGraph Graph::getPrimalBoostGraph() {
+
+    return this->graph;
+}
+
+UndirectedGraph Graph::getDualBoostGraph() {
+
+    assert(boost::num_vertices(dual) != 0);
+
+    return this->dual;
+}
+
+vector<Edge> Graph::buildTree(vector<Edge> primalEdgesToRemove, map<Edge, double> weights) {
 
     vector<Edge> spanningTree;
 
-    double minWeight = 9000;
-    double maxWeight = -1.0;
+    EdgeIterator it, itEnd;
 
-    for(int i = 0; i < weights.rows(); i++) {
+    for(tie(it, itEnd) = boost::edges(graph); it != itEnd; it++) {
 
-        for(int j = i; j < weights.rows(); j++) {
-
-            pair<Edge, bool> edge = boost::edge(i, j, graph);
-            
-            if(edge.second) {
-
-                boost::put(boost::edge_weight_t(), graph, edge.first, weights(i, j));
-
-                double weight = boost::get(boost::edge_weight_t(), graph, edge.first);
-
-                minWeight = (minWeight > weight)? weight:minWeight;
-                maxWeight = (maxWeight < weight)? weight:maxWeight;         
-            }
-        }
+        boost::put(boost::edge_weight_t(), graph, *it, weights[*it]);
     }
 
-    cout << "Min weight: " << minWeight << " Max weight: " << maxWeight << endl;
+    for(vector<Edge>::iterator it = primalEdgesToRemove.begin(); it != primalEdgesToRemove.end(); it++) {
+
+        boost::put(boost::edge_weight_t(), graph, *it, 9999);
+    }
 
     boost::kruskal_minimum_spanning_tree(graph, back_inserter(spanningTree));
 
-    cout << "Spanning tree built" << endl;
+    cout << "Tree built" << endl;
 
-    Eigen::MatrixXi treeAdjacency = Eigen::MatrixXi::Zero(weights.rows(), weights.cols());
+    return spanningTree;
+}
 
-    for(Edge e : spanningTree) {
+vector<Edge> Graph::buildCotree(vector<Edge> primalEdgesToRemove, map<Edge, double> weights) {
 
-        treeAdjacency(boost::source(e, graph), boost::target(e, graph)) = 1;
+    vector<Edge> spanningTree;
+
+    EdgeIterator it, itEnd;
+
+    for(tie(it, itEnd) = boost::edges(dual); it != itEnd; it++) {
+
+        boost::put(boost::edge_weight_t(), dual, *it, -1.0*weights[dualToPrimal[*it]]);
     }
+
+    for(vector<Edge>::iterator it = primalEdgesToRemove.begin(); it != primalEdgesToRemove.end(); it++) {
+
+        boost::put(boost::edge_weight_t(), dual, primalToDual[*it], 9999);
+    }
+
+    cout << "Weights assigned" << endl;
+
+    boost::kruskal_minimum_spanning_tree(dual, back_inserter(spanningTree));
+
+    cout << "Cotree built" << endl;
+
+    return spanningTree;
+}
+
+Visualizer Graph::getTreeVisualizer(vector<Edge> edges) {
+
+    Visualizer visualizer;
+
+    visualizer.vertices1 = Eigen::MatrixXd::Zero(edges.size(), 3); //TODO: Make sure it works graph references
+    visualizer.vertices2 = Eigen::MatrixXd::Zero(edges.size(), 3);
+
+    int index = 0;
+    for(vector<Edge>::iterator it = edges.begin(); it != edges.end(); it++, index++) {
+
+        Vertex source = boost::source(*it, graph);
+        Vertex target = boost::target(*it, graph);
+
+        visualizer.vertices1.row(index) = vertices[source];
+        visualizer.vertices2.row(index) = vertices[target];
+    }
+
+    return visualizer;
+}
+
+Visualizer Graph::getCotreeVisualizer(vector<Edge> edges) {
+
+    Visualizer visualizer;
+
+    visualizer.vertices1 = Eigen::MatrixXd::Zero(edges.size(), 3); //TODO: Make sure it works graph references
+    visualizer.vertices2 = Eigen::MatrixXd::Zero(edges.size(), 3);
+
+    int index = 0;
+    for(vector<Edge>::iterator it = edges.begin(); it != edges.end(); it++, index++) {
+
+        Vertex source = boost::source(*it, dual);
+        Vertex target = boost::target(*it, dual);
+
+        visualizer.vertices1.row(index) = dualVertices[source];
+        visualizer.vertices2.row(index) = dualVertices[target];
+    }
+
+    return visualizer;
+}
+
+vector<Edge> Graph::remainingEdges(vector<Edge> edgesToExcludePrimal, vector<Edge> edgesToExcludeDual) {
+
+    vector<Edge> edges;
+
+    EdgeIterator it, itEnd;
+
+    for(tie(it, itEnd) = boost::edges(graph); it != itEnd; it++) {
+
+        if(find(edgesToExcludePrimal.begin(), edgesToExcludePrimal.end(), *it) == edgesToExcludePrimal.end()) {
+
+            edges.push_back(*it);
+        }
+    }
+
+    for(vector<Edge>::iterator it = edgesToExcludeDual.begin(); it != edgesToExcludeDual.end(); it++) {
+
+        vector<Edge>::iterator foundIt = find(edges.begin(), edges.end(), dualToPrimal[*it]);
+
+        if(foundIt != edges.end()) {
+
+            edges.erase(foundIt);
+        }
+    }
+
+    return edges;
+}
+
+map<Vertex, Eigen::RowVector3d> Graph::getVerticesForEdges(vector<Edge> edges) {
+
+    map<Vertex, Eigen::RowVector3d> customVertices;
+
+    for(vector<Edge>::iterator it = edges.begin(); it != edges.end(); it++) {
+
+        Vertex source = boost::source(*it, graph);
+        Vertex target = boost::target(*it, graph);
+
+        customVertices.insert(pair<Vertex, Eigen::RowVector3d>(source, vertices[source]));
+        customVertices.insert(pair<Vertex, Eigen::RowVector3d>(target, vertices[target]));
+    }
+
+    return customVertices;
+}
+
+pair<vector<Vertex>, vector<Eigen::RowVector3d>> Graph::findPathBetweenSourceAndTarget() {
     
-    cout << "Building graph from MST" << endl;
+    assert(source != -1 && target != -1);
 
-    Graph tree;
-    tree.buildGraphFromVerticesAndEdges(this->vertices, treeAdjacency);
+    vector<Vertex> path;
+    vector<Eigen::RowVector3d> pathPositions;
 
-    return tree;
-}
-
-Graph Graph::getDual() {
-
-    Graph dual;
-
-    Eigen::MatrixXi faceAdjacency;
-    Eigen::MatrixXi edgeAdjacency;
-
-    igl::triangle_triangle_adjacency(faces, faceAdjacency, edgeAdjacency);
-
-    Eigen::MatrixXd faceCenters(faces.rows(), 3);
-    
-    for(int i = 0; i < faces.rows(); i++) {
-
-        for(int j = 0; j < 3; j++) {
-
-            faceCenters(i, j) = (vertices(faces(i, 0), j) + vertices(faces(i, 1), j) + vertices(faces(i, 2), j)) / 3.0;
-        }
-    }
-
-    Eigen::MatrixXi dualAdjacency = Eigen::MatrixXi::Zero(faces.rows(), faces.rows());
-
-    map<pair<int, int>, pair<int, int>> dualMap;
-
-    int count = 0;
-
-    for(int i = 0; i < faceAdjacency.rows(); i++) {
-
-        for(int j = 0; j < 3; j++) {
-
-            if(dualAdjacency(i, faceAdjacency(i, j)) == 0) {
-
-                dualAdjacency(i, faceAdjacency(i, j)) = 1;
-                dualAdjacency(faceAdjacency(i, j), i) = 1;
-
-                vector<int> common = findCommonVertices(i, faceAdjacency(i, j));
-
-                pair<int, int> key1(i, faceAdjacency(i, j)), value1(common[0], common[1]);
-
-                dualMap.insert({{key1, value1}});
-            }
-        }
-    }
-
-    dual.buildGraphFromVerticesAndEdges(faceCenters, dualAdjacency);
-    dual.setDualMap(dualMap);
-
-    return dual;
-}
-
-Visualizer Graph::getVisualizer() {
-
-    return this->visualizer;
-}
-
-vector<int> Graph::findCommonVertices(int face1, int face2) {
-
-    vector<int> commonVertices;
-
-    for(int i = 0; i < 3; i++) {
-
-        for(int j = 0; j < 3; j++) {
-
-            if(faces(face1, i) == faces(face2, j)) {
-
-                commonVertices.push_back(faces(face1, i));
-            }
-        }
-    }
-
-    return commonVertices;
-}
-
-void Graph::setDualMap(map<pair<int, int>, pair<int, int>> dualMap) {
-
-    this->dualMap = dualMap;
-}
-
-map<pair<int, int>, pair<int, int>> Graph::getDualMap() {
-
-    return this->dualMap;
-}
-
-void Graph::removeEdgesForInverseDual(const Eigen::MatrixXi dualEdges, map<VertexPair, VertexPair> dualMap) {
-
-    cout << "Removing edges from primal graph" << endl;
-
-    int count = 0;
-    
-    for(int i = 0; i < dualEdges.rows(); i++) {
-
-        for(int j = i; j < dualEdges.cols(); j++) {
-
-            if(dualEdges(i, j) == 1) {
-
-                count++;
-
-                bool found = false;
-
-                for(map<VertexPair, VertexPair>::iterator it = dualMap.begin(); it != dualMap.end(); it++) {
-
-                    if((it->first.first == i && it->first.second == j) || (it->first.first == j && it->first.second == i)) {
-
-                        edges(it->second.first, it->second.second) = 0;
-                        edges(it->second.second, it->second.first) = 0;
-
-                        boost::remove_edge(it->second.first, it->second.second, graph);
-
-                        found = true;
-
-                        break;
-                    }
-                }
-
-                if (!found)
-                    cout << "Did not find mapping for " << i << " " << j << endl;
-            }
-        }
-    }
-
-    cout << count << " edges removed" << endl;
-
-    //cout << "After removing edges:" << endl;
-    //printGraphInformatiaon();
-
-    updateVisualizer();
-}
-
-void Graph::removeEdgesForDual(const Eigen::MatrixXi primalEdges) {
-
-    cout << "Removing edges from dual graph" << endl;
-
-    int count = 0;
-
-    for(int i = 0; i < primalEdges.rows(); i++) {
-
-        for(int j = i; j < primalEdges.cols(); j++) {
-
-            if(primalEdges(i, j) == 1) {
-
-                count++;
-
-                bool found = false;
-
-                for(map<VertexPair, VertexPair>::iterator it = dualMap.begin(); it != dualMap.end(); it++) {
-
-                    if((it->second.first == i && it->second.second == j) || (it->second.first == j && it->second.second == i)) {
-
-                        edges(it->first.first, it->first.second) = 0;
-                        edges(it->first.second, it->first.first) = 0;
-
-                        boost::remove_edge(it->first.first, it->first.second, graph);
-
-                        found = true;
-
-                        break;
-                    }
-                }
-
-                if (!found)
-                    cout << "Did not find mapping for " << i << " " << j << endl;
-            }
-        }
-    }
-
-    cout << count << " edges removed" << endl;
-
-    //cout << "After removing edges:" << endl;
-    //printGraphInformatiaon();
-
-    updateVisualizer();
-}
-
-void Graph::removeEdges(const Eigen::MatrixXi edgesToRemove) {
-
-    cout << "Removing edges" << endl;
-
-    int count = 0;
-
-    for(int i = 0; i < edgesToRemove.rows(); i++) {
-
-        for(int j = i; j < edgesToRemove.cols(); j++) {
-
-            if(edgesToRemove(i, j) == 1) {
-
-                boost::remove_edge(i, j, graph);
-
-                count++;
-
-                edges(i, j) = 0;
-                edges(j, i) = 0;
-            }
-        }
-    }
-
-    cout << count << " edges removed" << endl;
-
-    cout << "After removing edges:" << endl;
-    printGraphInformatiaon();
-
-    updateVisualizer();
-}
-
-vector<int> Graph::findPathBetween(int source, int destination, Eigen::MatrixXd weights) {
-
-    vector<int> path;
-
-    Vertex sourceVertex = boost::vertex(source, graph);
-    Vertex destinationVertex = boost::vertex(destination, graph);
-    CustomVisitor visitor(destinationVertex);
+    CustomVisitor visitor(target);
 
     vector<Vertex> predecessor(boost::num_vertices(graph));
     vector<double> distances(boost::num_vertices(graph));
 
-    //cout << "Assigning weights" << endl;
+    EdgeIterator it, itEnd;
 
-    for(int i = 0; i < weights.rows(); i++) {
+    double weightToRestore = boost::get(boost::edge_weight_t(), graph, boost::edge(source, target, graph).first);
 
-        for(int j = i; j < weights.rows(); j++) {
-
-            pair<Edge, bool> edge = boost::edge(i, j, graph);
-            
-            if(edge.second) {
-
-                boost::put(boost::edge_weight_t(), graph, edge.first, weights(i, j));          
-            }
-        }
-    }
+    boost::put(boost::edge_weight_t(), graph, boost::edge(source, target, graph).first, 9999.0);
 
     try {
 
-        boost::dijkstra_shortest_paths(graph, sourceVertex, boost::predecessor_map(&predecessor[0]).distance_map(&distances[0]).visitor(visitor));
+        boost::dijkstra_shortest_paths(graph, source, boost::predecessor_map(&predecessor[0]).distance_map(&distances[0]).visitor(visitor));
     }
     catch (int exception){
+
+        boost::put(boost::edge_weight_t(), graph, boost::edge(source, target, graph).first, weightToRestore);
  
-        int current = destination;
+        Vertex current = target;
 
         while(current != source) {
 
             path.insert(path.begin(), current);
+            pathPositions.insert(pathPositions.begin(), this->vertices[current]);
 
             current = predecessor[current];
         }
 
         path.insert(path.begin(), source);
+        pathPositions.insert(pathPositions.begin(), this->vertices[source]);
     }
 
-    return path;
+    return pair<vector<Vertex>, vector<Eigen::RowVector3d>>(path, pathPositions);
 }
 
-void Graph::addPath(const vector<int> path) {
+Visualizer Graph::getCycleVisualizer(vector<Vertex> path, vector<Eigen::RowVector3d> pathPositions) {
+
+    Visualizer visualizer;
+
+    visualizer.vertices1 = Eigen::MatrixXd::Zero(path.size(), 3);
+    visualizer.vertices2 = Eigen::MatrixXd::Zero(path.size(), 3);
 
     for(int i = 0; i < path.size()-1; i++) {
 
-        boost::add_edge(path[i], path[i+1], graph);
-
-        edges(path[i], path[i+1]) = 1;
-        edges(path[i+1], path[i]) = 1;
+        visualizer.vertices1.row(i) = pathPositions[i];
+        visualizer.vertices2.row(i) = pathPositions[i+1];
     }
 
-    updateVisualizer();
+    visualizer.vertices1.row(path.size()-1) = pathPositions[path.size()-1];
+    visualizer.vertices2.row(path.size()-1) = pathPositions[0];
+
+    return visualizer;
 }
 
-void Graph::updateVisualizer() {
+Eigen::MatrixXd Graph::getVerticesForEdge(Edge edge) {
 
-    this->visualizer.vertices1 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
-    this->visualizer.vertices2 = Eigen::MatrixXd::Zero(boost::num_edges(graph), 3);
+    Eigen::MatrixXd vertices = Eigen::MatrixXd::Zero(2, 3);
 
-    int count = 0;
-    for(int i = 0; i < edges.rows(); i++) {
+    Vertex source = boost::source(edge, graph);
+    Vertex target = boost::target(edge, graph);
 
-        for(int j = i; j < edges.cols(); j++) {
+    vertices.row(0) = this->vertices[source];
+    vertices.row(1) = this->vertices[target];
 
-            if(edges(i, j) == 1) {
-
-                this->visualizer.vertices1.row(count) = this->vertices.row(i);
-                this->visualizer.vertices2.row(count) = this->vertices.row(j);
-
-                count++;
-            }
-        }
-    }
-
-    cout << "Updated visualizer for " << count << " edges" << endl;
+    return vertices;
 }
 
-vector<VertexPair> Graph::getBoostEdges() {
+Eigen::MatrixXd Graph::getSourceAndTarget() {
 
-    pair<UndirectedGraph::edge_iterator, UndirectedGraph::edge_iterator> boostEdges = boost::edges(graph);
+    assert(this->source != -1 && this->target != -1);
 
-    vector<VertexPair> resultEdges;
+    Eigen::MatrixXd vertices = Eigen::MatrixXd::Zero(2, 3);
 
-    for(UndirectedGraph::edge_iterator it = boostEdges.first; it != boostEdges.second; it++) {
+    vertices.row(0) = this->vertices[this->source];
+    vertices.row(1) = this->vertices[this->target];
 
-        resultEdges.push_back(VertexPair(boost::source(*it, graph), boost::target(*it, graph)));
-    }
-
-    return resultEdges;
+    return vertices;
 }

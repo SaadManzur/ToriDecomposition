@@ -3,6 +3,8 @@
 
 #include <iostream>
 #include <stack>
+#include <cstdlib>
+#include <time.h>
 using namespace std;
 
 #include <Eigen/Dense>
@@ -17,6 +19,8 @@ typedef boost::property<boost::edge_weight_t, double> EdgeWeightProperty;
 typedef boost::adjacency_list<boost::setS, boost::vecS, boost::undirectedS, boost::no_property, EdgeWeightProperty> UndirectedGraph;
 typedef boost::graph_traits<UndirectedGraph>::edge_descriptor Edge;
 typedef boost::graph_traits<UndirectedGraph>::vertex_descriptor Vertex;
+typedef boost::graph_traits<UndirectedGraph>::edge_iterator EdgeIterator;
+typedef boost::graph_traits<UndirectedGraph>::vertex_iterator VertexIterator;
 typedef std::pair<int, int> VertexPair;
 
 typedef struct VisualizerObject {
@@ -50,34 +54,44 @@ class Graph {
 
 private:
     UndirectedGraph graph;
-    Eigen::MatrixXd vertices;
-    Eigen::MatrixXi faces;
-    Eigen::MatrixXi edges;
-    Visualizer visualizer;
-    map<pair<int, int>, pair<int, int>> dualMap;
+    UndirectedGraph dual;
+    map<Vertex, Eigen::RowVector3d> vertices;
+    map<Vertex, Eigen::RowVector3d> dualVertices;
+    map<Edge, vector<int>> primalEdgeDualVerticesMap;
+    map<Edge, Edge> primalToDual;
+    map<Edge, Edge> dualToPrimal;
+    Visualizer primalVisualizer;
+    Visualizer dualVisualizer;
+    vector<Edge> edgesUsedForTreeCotree;
+    Vertex source = -1;
+    Vertex target = -1;
 
 public:
     Graph();
 
     void buildGraphFromVerticesAndFaces(const Eigen::MatrixXd vertices, const Eigen::MatrixXi faces);
-    void buildGraphFromVerticesAndEdges(const Eigen::MatrixXd vertices, const Eigen::MatrixXi edges);
-    void buildGraphFromVerticesAndPaths(const Eigen::MatrixXd vertices, const vector<vector<int>> paths);
-    Graph buildMST(const Eigen::MatrixXd weights);
-    vector<int> findCommonVertices(int face1, int face2);
-    void printGraphInformatiaon();
-    void removeEdgesForInverseDual(const Eigen::MatrixXi dualEdges, map<VertexPair, VertexPair> dualMap);
-    void removeEdgesForDual(const Eigen::MatrixXi primalEdges);
-    void removeEdges(const Eigen::MatrixXi edgesToRemove);
-    void addPath(const vector<int> path);
-    void updateVisualizer();
-    void setDualMap(map<pair<int, int>, pair<int, int>> dualMap);
-    vector<int> findPathBetween(int source, int destination, Eigen::MatrixXd weights);
-    map<pair<int, int>, pair<int, int>> getDualMap();
-    Eigen::MatrixXd getVertices();
-    Eigen::MatrixXi getEdges();
-    vector<VertexPair> getBoostEdges();
-    Graph getDual();
-    Visualizer getVisualizer();
+    void buildGraphFromVerticesAndEdges(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, vector<Edge> edges, Edge edgeToAdd);
+    map<Vertex, Eigen::RowVector3d> getVerticesForEdges(vector<Edge> edges);
+    Eigen::MatrixXd getVerticesForEdge(Edge edge);
+
+    Eigen::MatrixXd getDualVerticesAsMatrix();
+    Eigen::MatrixXd getPrimalVerticesAsMatrix();
+    map<Vertex, Eigen::RowVector3d> getPrimalVertices();
+    pair<EdgeIterator, EdgeIterator> getPrimalEdges();
+    UndirectedGraph getPrimalBoostGraph();
+    UndirectedGraph getDualBoostGraph();
+    vector<Edge> buildTree(vector<Edge> edgesToRemove, map<Edge, double> weights);
+    vector<Edge> buildCotree(vector<Edge> edgesToRemove, map<Edge, double> weights);
+    vector<Edge> remainingEdges(vector<Edge> edgesToExcludePrimal, vector<Edge> edgesToExcludeDual);
+    pair<vector<Vertex>, vector<Eigen::RowVector3d>> findPathBetweenSourceAndTarget();
+    static Visualizer getCycleVisualizer(vector<Vertex> path, vector<Eigen::RowVector3d> pathPositions);
+
+    Visualizer getPrimalVisualizer();
+    Visualizer getDualVisualizer();
+    Visualizer getTreeVisualizer(vector<Edge> edges);
+    Visualizer getCotreeVisualizer(vector<Edge> edges);
+    Eigen::MatrixXd getSourceAndTarget();
+    pair<Visualizer, Visualizer> getRandomPrimalAndDualVisualizer(int count);
 };
 
 #endif

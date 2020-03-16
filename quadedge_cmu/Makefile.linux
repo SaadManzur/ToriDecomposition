@@ -1,0 +1,28 @@
+
+CS463 = /afs/andrew.cmu.edu/scs/cs/15-463
+INCDIR = -I$(CS463)/pub/include
+LIBDIR = -L$(CS463)/pub/lib
+
+# The options -g, -DVL_CHECKING, and -lsvl.dbg are for debugging.
+# The latter two do extra subscriptrange checking in the SVL library.
+# Change them to -O or -O2, (nothing), and -lsvl for up to 6x speedup!
+
+CXXFLAGS = -g $(INCDIR) -DVL_CHECKING
+LDFLAGS = $(LIBDIR)
+
+OBJS = edge.o face.o cell.o vertex.o array.o list.o obj.o
+
+LIB = libcell.a
+
+.cc.o:
+	$(CXX) $(CXXFLAGS) -c $<
+
+$(LIB): $(OBJS)
+	ar cr $(LIB) $(OBJS)
+
+test: test.o $(LIB)
+	$(CXX) -O  test $(LDFLAGS) test.o $(LIB) -lsvl.dbg
+
+clean:
+	-rm -f *.o $(LIB) test core
+ 
