@@ -5,8 +5,9 @@ Graph::Graph() {
     srand(time(NULL));
 }
 
-void Graph::buildGraphFromVerticesAndEdges(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, vector<Edge> edges, Edge edgeToAdd) {
+map<pair<int, int>, pair<int, int>> Graph::buildGraphFromVerticesAndEdges(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, vector<Edge> edges, Edge edgeToAdd) {
     
+    map<pair<int, int>, pair<int, int>> cycleToOriginal;
     map<Vertex, Vertex> originalToTemp;
 
     Vertex sourceFromOriginal = boost::source(edgeToAdd, this->graph);
@@ -59,12 +60,18 @@ void Graph::buildGraphFromVerticesAndEdges(UndirectedGraph graph, map<Vertex, Ei
         this->primalVisualizer.vertices1.row(index) = this->vertices[newSource];
         this->primalVisualizer.vertices2.row(index) = this->vertices[newTarget];
 
-        if( newEdge.second )
+        if( newEdge.second ) {
+
+            cycleToOriginal.insert(pair<pair<int, int>, pair<int, int>>(pair<int, int>(newSource, newTarget), pair<int, int>(source, target)));
+
             boost::put(boost::edge_weight_t(), this->graph, newEdge.first, weight);
+        }
     }
 
     this->source = originalToTemp[sourceFromOriginal];
     this->target = originalToTemp[targetFromOriginal];
+
+    return cycleToOriginal;
 }
 
 void Graph::buildGraphFromVerticesAndFaces(const Eigen::MatrixXd vertices, const Eigen::MatrixXi faces) {
@@ -463,6 +470,8 @@ pair<vector<Vertex>, vector<Eigen::RowVector3d>> Graph::findPathBetweenSourceAnd
             path.insert(path.begin(), current);
             pathPositions.insert(pathPositions.begin(), this->vertices[current]);
 
+            pair<Edge, bool> edge = boost::edge(current, predecessor[current], this->graph);
+
             current = predecessor[current];
         }
 
@@ -515,4 +524,59 @@ Eigen::MatrixXd Graph::getSourceAndTarget() {
     vertices.row(1) = this->vertices[this->target];
 
     return vertices;
+}
+
+Visualizer Graph::getVisualizerFromCycleGraph(vector<VertexPair> originalMapFromCycleEdges) {
+
+    Visualizer visualizer;
+    visualizer.vertices1 = Eigen::MatrixXd::Zero(originalMapFromCycleEdges.size(), 3);
+    visualizer.vertices2 = Eigen::MatrixXd::Zero(originalMapFromCycleEdges.size(), 3);
+
+    int index = 0;
+
+    for(int i = 0; i < originalMapFromCycleEdges.size(); i++, index++) {
+
+        Vertex source = boost::vertex(originalMapFromCycleEdges[i].first, this->graph);
+        Vertex target = boost::vertex(originalMapFromCycleEdges[i].second, this->graph);
+
+        visualizer.vertices1.row(index) = this->vertices[source];
+        visualizer.vertices2.row(index) = this->vertices[target];
+    }
+
+    cout << "Path length: " << index << endl;
+    
+    return visualizer;
+}
+
+vector<VertexPair> Graph::getPathBetweenSourceAndTarget(vector<Vertex> &path, map<VertexPair, VertexPair> &cycleToOriginal) {
+
+    vector<VertexPair> originalEdges;
+
+    cout << cycleToOriginal.size() << endl;
+
+    cout << boost::num_edges(this->graph) << endl;
+
+    cout << "Path length from cycle: " <<  path.size() << endl;
+
+    for(int i = 0; i < path.size()-1; i++) {
+
+        int source = boost::vertex(path[i], this->graph);
+        int target = boost::vertex(path[i+1], this->graph);
+
+        //TODO: Dangerous grounds (a, b) does not resolve to (b, a)
+
+        if(cycleToOriginal.find(VertexPair (source, target)) != cycleToOriginal.end()) {
+
+            originalEdges.push_back(cycleToOriginal[pair<int, int>(source, target)]);   
+        }
+        else {
+
+            originalEdges.push_back(cycleToOriginal[pair<int, int>(target, source)]);
+        }
+         
+    }
+
+    cout << "Path length from original: " << originalEdges.size() << endl;
+
+    return originalEdges;
 }

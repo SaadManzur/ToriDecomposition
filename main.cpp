@@ -24,7 +24,7 @@ Graph graph;
 vector<Edge> tree;
 vector<Edge> cotree;
 vector<Edge> remainingEdges;
-vector<Graph> cycleGraphs;
+vector<pair<Graph, map<pair<int, int>, pair<int, int>>>> cycleGraphs;
 
 int cycleIndex = 0;
 char lastKeyPressed = '1';
@@ -46,8 +46,8 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = false;
-    viewer.data().add_edges(graph.getPrimalVisualizer().vertices1, graph.getPrimalVisualizer().vertices2, Eigen::RowVector3d(0.9, 0.1, 0.1));
-    viewer.data().add_edges(graph.getDualVisualizer().vertices1, graph.getDualVisualizer().vertices2, Eigen::RowVector3d(0.1, 0.1, 0.9));
+    viewer.data().add_edges(graph.getPrimalVisualizer().vertices1, graph.getPrimalVisualizer().vertices2, COLOR_RED);
+    viewer.data().add_edges(graph.getDualVisualizer().vertices1, graph.getDualVisualizer().vertices2, COLOR_BLUE);
     viewer.data().line_width = 2.0f;
     viewer.core().align_camera_center(vertices, faces);
   }
@@ -56,7 +56,7 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = true;
-    viewer.data().add_points(graph.getDualVerticesAsMatrix(), Eigen::RowVector3d(0.0, 0.0, 1.0));
+    viewer.data().add_points(graph.getDualVerticesAsMatrix(), COLOR_BLUE);
     viewer.data().point_size = 3.0f;
     viewer.core().align_camera_center(vertices, faces);
   }
@@ -67,8 +67,8 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = false;
-    viewer.data().add_edges(randomVisualizers.first.vertices1, randomVisualizers.first.vertices2, Eigen::RowVector3d(0.9, 0.1, 0.1));
-    viewer.data().add_edges(randomVisualizers.second.vertices1, randomVisualizers.second.vertices2, Eigen::RowVector3d(0.1, 0.1, 0.9));
+    viewer.data().add_edges(randomVisualizers.first.vertices1, randomVisualizers.first.vertices2, COLOR_RED);
+    viewer.data().add_edges(randomVisualizers.second.vertices1, randomVisualizers.second.vertices2, COLOR_BLUE);
     viewer.data().line_width = 2.0f;
     viewer.core().align_camera_center(vertices, faces);
   }
@@ -80,8 +80,8 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = false;
-    viewer.data().add_edges(treeVisualizer.vertices1, treeVisualizer.vertices2, Eigen::RowVector3d(0.9, 0.1, 0.1));
-    viewer.data().add_edges(cotreeVisualizer.vertices1, cotreeVisualizer.vertices2, Eigen::RowVector3d(0.1, 0.1, 0.9));
+    viewer.data().add_edges(treeVisualizer.vertices1, treeVisualizer.vertices2, COLOR_RED);
+    viewer.data().add_edges(cotreeVisualizer.vertices1, cotreeVisualizer.vertices2, COLOR_BLUE);
     viewer.data().line_width = 2.0f;
     viewer.core().align_camera_center(vertices, faces);
   }
@@ -93,8 +93,8 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = false;
-    viewer.data().add_edges(treeVisualizer.vertices1, treeVisualizer.vertices2, Eigen::RowVector3d(0.9, 0.1, 0.1));
-    viewer.data().add_edges(remainingVisualizer.vertices1, remainingVisualizer.vertices2, Eigen::RowVector3d(0.1, 0.9, 0.1));
+    viewer.data().add_edges(treeVisualizer.vertices1, treeVisualizer.vertices2, COLOR_RED);
+    viewer.data().add_edges(remainingVisualizer.vertices1, remainingVisualizer.vertices2, COLOR_GREEN);
     viewer.data().line_width = 2.0f;
     viewer.core().align_camera_center(vertices, faces);
   }
@@ -103,15 +103,15 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = false;
-    viewer.data().add_edges(cycleGraphs[cycleIndex].getPrimalVisualizer().vertices1, cycleGraphs[cycleIndex].getPrimalVisualizer().vertices2, Eigen::RowVector3d(0.1, 0.9, 0.1));
-    viewer.data().add_points(graph.getVerticesForEdge(remainingEdges[cycleIndex]), Eigen::RowVector3d(0.9, 0.1, 0.1));
+    viewer.data().add_edges(cycleGraphs[cycleIndex].first.getPrimalVisualizer().vertices1, cycleGraphs[cycleIndex].first.getPrimalVisualizer().vertices2, Eigen::RowVector3d(0.1, 0.9, 0.1));
+    viewer.data().add_points(graph.getVerticesForEdge(remainingEdges[cycleIndex]), COLOR_RED);
     viewer.data().line_width = 2.0f;
     viewer.data().point_size = 8.0f;
     viewer.core().align_camera_center(vertices, faces);
   }
   else if(key == '8') {
 
-    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[cycleIndex].findPathBetweenSourceAndTarget();
+    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[cycleIndex].first.findPathBetweenSourceAndTarget();
 
     Visualizer cycleVisualizer = Graph::getCycleVisualizer(path.first, path.second);
 
@@ -119,7 +119,24 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = false;
     viewer.data().add_edges(cycleVisualizer.vertices1, cycleVisualizer.vertices2, COLOR_GREEN);
-    viewer.data().add_points(cycleGraphs[cycleIndex].getSourceAndTarget(), COLOR_RED);
+    viewer.data().add_points(cycleGraphs[cycleIndex].first.getSourceAndTarget(), COLOR_RED);
+    viewer.data().line_width = 2.0f;
+    viewer.data().point_size = 8.0f;
+    viewer.core().align_camera_center(vertices, faces);
+  }
+  else if(key == '9') {
+
+    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[cycleIndex].first.findPathBetweenSourceAndTarget();
+
+    vector<VertexPair> originalPath = cycleGraphs[cycleIndex].first.getPathBetweenSourceAndTarget(path.first, cycleGraphs[cycleIndex].second);
+
+    Visualizer cycleVisualizer = graph.getVisualizerFromCycleGraph(originalPath);
+
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().show_lines = false;
+    viewer.data().add_edges(cycleVisualizer.vertices1, cycleVisualizer.vertices2, COLOR_GREEN);
+    viewer.data().add_points(cycleGraphs[cycleIndex].first.getSourceAndTarget(), COLOR_RED);
     viewer.data().line_width = 2.0f;
     viewer.data().point_size = 8.0f;
     viewer.core().align_camera_center(vertices, faces);
@@ -130,7 +147,7 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
 
     cout << "Index incremented to " << cycleIndex << endl;
 
-    if(lastKeyPressed > '6') {
+    if(lastKeyPressed > '7') {
 
       return keyDown(viewer, lastKeyPressed, modifier);
     }
@@ -151,8 +168,8 @@ int main(int argc, char *argv[]) {
   map<Edge, double> maxCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.maximalDirection);
 
   vector<Edge> edgesToRemove;
-  tree = graph.buildTree(edgesToRemove, minCost);
-  cotree = graph.buildCotree(tree, minCost);
+  tree = graph.buildTree(edgesToRemove, maxCost);
+  cotree = graph.buildCotree(tree, maxCost);
 
   cout << "Tree edges (#): " << tree.size() << endl;
   cout << "Cotree edges (#): " << cotree.size() << endl;
@@ -161,9 +178,10 @@ int main(int argc, char *argv[]) {
 
   for(int i = 0; i < remainingEdges.size(); i++) {
     Graph cycleGraph;
-    cycleGraph.buildGraphFromVerticesAndEdges(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), tree, remainingEdges[i]);
+    map<pair<int, int>, pair<int, int>> cycleToOriginal = cycleGraph.buildGraphFromVerticesAndEdges(
+      graph.getPrimalBoostGraph(), graph.getPrimalVertices(), tree, remainingEdges[i]);
 
-    cycleGraphs.push_back(cycleGraph);
+    cycleGraphs.push_back(pair<Graph, map<pair<int, int>, pair<int, int>>>(cycleGraph, cycleToOriginal));
 
     auto path = cycleGraph.findPathBetweenSourceAndTarget();
 

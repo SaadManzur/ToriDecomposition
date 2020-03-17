@@ -70,7 +70,7 @@ public:
     Graph();
 
     void buildGraphFromVerticesAndFaces(const Eigen::MatrixXd vertices, const Eigen::MatrixXi faces);
-    void buildGraphFromVerticesAndEdges(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, vector<Edge> edges, Edge edgeToAdd);
+    map<VertexPair, VertexPair> buildGraphFromVerticesAndEdges(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, vector<Edge> edges, Edge edgeToAdd);
     map<Vertex, Eigen::RowVector3d> getVerticesForEdges(vector<Edge> edges);
     Eigen::MatrixXd getVerticesForEdge(Edge edge);
 
@@ -85,11 +85,13 @@ public:
     vector<Edge> remainingEdges(vector<Edge> edgesToExcludePrimal, vector<Edge> edgesToExcludeDual);
     pair<vector<Vertex>, vector<Eigen::RowVector3d>> findPathBetweenSourceAndTarget();
     static Visualizer getCycleVisualizer(vector<Vertex> path, vector<Eigen::RowVector3d> pathPositions);
+    vector<VertexPair> getPathBetweenSourceAndTarget(vector<Vertex> &path, map<VertexPair, VertexPair> &cycleToOriginal);
 
     Visualizer getPrimalVisualizer();
     Visualizer getDualVisualizer();
     Visualizer getTreeVisualizer(vector<Edge> edges);
     Visualizer getCotreeVisualizer(vector<Edge> edges);
+    Visualizer getVisualizerFromCycleGraph(vector<VertexPair> originalMapFromCycleEdges);
     Eigen::MatrixXd getSourceAndTarget();
     pair<Visualizer, Visualizer> getRandomPrimalAndDualVisualizer(int count);
 };
