@@ -22,6 +22,4 @@ Visualizer getCurvatureVisualization(const Eigen::MatrixXd vertices, const Eigen
 
 map<Edge, double> computeEdgeWeights(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, pair<EdgeIterator, EdgeIterator> edges, const Eigen::MatrixXd directions);
 
-Eigen::MatrixXd transferDualWeights(const Eigen::MatrixXd primalEdgeWeights, const Eigen::MatrixXi dualEdges, const map<pair<int, int>, pair<int, int>> dualMap);
-
 #endif

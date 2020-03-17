@@ -4,6 +4,18 @@
         "complex": "cpp",
         "alignedvector3": "cpp",
         "*.tcc": "cpp",
-        "type_traits": "cpp"
+        "type_traits": "cpp",
+        "array": "cpp",
+        "bitset": "cpp",
+        "functional": "cpp",
+        "mutex": "cpp",
+        "regex": "cpp",
+        "tuple": "cpp",
+        "typeindex": "cpp",
+        "valarray": "cpp",
+        "variant": "cpp",
+        "core": "cpp",
+        "bvh": "cpp",
+        "nonlinearoptimization": "cpp"
     }
 }

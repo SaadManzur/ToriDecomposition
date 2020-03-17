@@ -10,6 +10,7 @@
 #include "utils/readFile.h"
 #include "utils/graph.h"
 #include "utils/weight.h"
+#include "utils/cycle.h"
 
 using namespace std;
 
@@ -23,9 +24,14 @@ Graph graph;
 vector<Edge> tree;
 vector<Edge> cotree;
 vector<Edge> remainingEdges;
-Graph cycleGraph;
+vector<Graph> cycleGraphs;
+
+int cycleIndex = 0;
+char lastKeyPressed = '1';
 
 bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier) {
+
+  lastKeyPressed = (key != '=')? key: lastKeyPressed;
 
   if(key == '1') {
 
@@ -97,15 +103,15 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = false;
-    viewer.data().add_edges(cycleGraph.getPrimalVisualizer().vertices1, cycleGraph.getPrimalVisualizer().vertices2, Eigen::RowVector3d(0.1, 0.9, 0.1));
-    viewer.data().add_points(graph.getVerticesForEdge(remainingEdges[0]), Eigen::RowVector3d(0.9, 0.1, 0.1));
+    viewer.data().add_edges(cycleGraphs[cycleIndex].getPrimalVisualizer().vertices1, cycleGraphs[cycleIndex].getPrimalVisualizer().vertices2, Eigen::RowVector3d(0.1, 0.9, 0.1));
+    viewer.data().add_points(graph.getVerticesForEdge(remainingEdges[cycleIndex]), Eigen::RowVector3d(0.9, 0.1, 0.1));
     viewer.data().line_width = 2.0f;
     viewer.data().point_size = 8.0f;
     viewer.core().align_camera_center(vertices, faces);
   }
   else if(key == '8') {
 
-    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraph.findPathBetweenSourceAndTarget();
+    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[cycleIndex].findPathBetweenSourceAndTarget();
 
     Visualizer cycleVisualizer = Graph::getCycleVisualizer(path.first, path.second);
 
@@ -113,10 +119,21 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = false;
     viewer.data().add_edges(cycleVisualizer.vertices1, cycleVisualizer.vertices2, COLOR_GREEN);
-    viewer.data().add_points(cycleGraph.getSourceAndTarget(), COLOR_RED);
+    viewer.data().add_points(cycleGraphs[cycleIndex].getSourceAndTarget(), COLOR_RED);
     viewer.data().line_width = 2.0f;
     viewer.data().point_size = 8.0f;
     viewer.core().align_camera_center(vertices, faces);
+  }
+  else if(key == '=') {
+
+    cycleIndex = (cycleIndex + 1) % cycleGraphs.size();
+
+    cout << "Index incremented to " << cycleIndex << endl;
+
+    if(lastKeyPressed > '6') {
+
+      return keyDown(viewer, lastKeyPressed, modifier);
+    }
   }
 
   return false;
@@ -142,10 +159,18 @@ int main(int argc, char *argv[]) {
 
   remainingEdges = graph.remainingEdges(tree, cotree);
 
-  cycleGraph.buildGraphFromVerticesAndEdges(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), tree, remainingEdges[0]);
+  for(int i = 0; i < remainingEdges.size(); i++) {
+    Graph cycleGraph;
+    cycleGraph.buildGraphFromVerticesAndEdges(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), tree, remainingEdges[i]);
 
-  cout << "Cycle graph edges (#): " << boost::num_edges(cycleGraph.getPrimalBoostGraph()) << endl;
-  cout << "Cycle graph vertices (#): " << boost::num_vertices(cycleGraph.getPrimalBoostGraph()) << endl;
+    cycleGraphs.push_back(cycleGraph);
+
+    auto path = cycleGraph.findPathBetweenSourceAndTarget();
+
+    Cycle cycle(path.second, path.first);
+
+    cout << "Cycle " << i << ": " << cycle.getCycleCost() << endl;
+  }
 
   igl::opengl::glfw::Viewer viewer;
   viewer.data().set_mesh(vertices, faces);

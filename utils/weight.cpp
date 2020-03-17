@@ -61,31 +61,3 @@ map<Edge, double> computeEdgeWeights(
 
     return weights;
 }
-
-Eigen::MatrixXd transferDualWeights(const Eigen::MatrixXd primalEdgeWeights, const Eigen::MatrixXi dualEdges, map<pair<int, int>, pair<int, int>> dualMap) {
-
-    Eigen::MatrixXd weights = Eigen::MatrixXd::Zero(dualEdges.rows(), dualEdges.cols());
-
-    double minWeight = 9000;
-    double maxWeight = -1.0;
-
-    for(int i = 0; i < dualEdges.rows(); i++) {
-
-        for(int j = i; j < dualEdges.cols(); j++) {
-
-            if(dualEdges(i, j) == 1) {
-
-                pair<int, int> mappedPrimalEdge = dualMap[pair<int, int>(i, j)];
-
-                weights(i, j) = primalEdgeWeights(mappedPrimalEdge.first, mappedPrimalEdge.second);
-
-                minWeight = (minWeight > weights(i, j))? weights(i, j):minWeight;
-                maxWeight = (maxWeight < weights(i, j))? weights(i, j):maxWeight;
-            }
-        }
-    }
-
-    cout << "(Weight Transfer) Min weight: " << minWeight << " Max weight: " << maxWeight << endl;
-
-    return weights;
-}

@@ -8,19 +8,19 @@
 #include <functional>
 using namespace std;
 
+#include "graph.h"
+
 #include <Eigen/Dense>
 
 class Cycle {
 
 private:
-    Eigen::MatrixXd vertices;
-    vector<int> path;
     double cycleEdgeDistance;
     double cycleVertexDistance;
     Eigen::Vector3d cycleCentroid;
 
 public:
-    Cycle(const Eigen::MatrixXd vertices, const vector<int> path);
+    Cycle(vector<Eigen::RowVector3d> vertices, vector<Vertex> path);
 
     double getCycleEdgeDistance();
     double getCycleVertexDistance();
@@ -28,10 +28,9 @@ public:
 
     double getCycleCost(const double alpha=1.0);
 
-    vector<int> getPath();
-    Eigen::MatrixXd getVertices();
+    static void sortCycles(vector<pair<Cycle, double>> &cycles);
 };
 
-void sortCycles(vector<pair<Cycle, double>> &cycles);
+
 
 #endif
