@@ -16,6 +16,9 @@
         "variant": "cpp",
         "core": "cpp",
         "bvh": "cpp",
-        "nonlinearoptimization": "cpp"
+        "nonlinearoptimization": "cpp",
+        "vector": "cpp",
+        "deque": "cpp",
+        "string": "cpp"
     }
 }

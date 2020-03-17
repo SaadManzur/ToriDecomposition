@@ -1,11 +1,6 @@
 #include <iostream>
 #include <igl/writeOBJ.h>
 #include <igl/opengl/glfw/Viewer.h>
-/*
-#include <igl/triangle_triangle_adjacency.h>
-#include <boost/graph/kruskal_min_spanning_tree.hpp>
-#include <boost/graph/adjacency_list.hpp>
-*/
 
 #include "utils/readFile.h"
 #include "utils/graph.h"
@@ -21,19 +16,22 @@ Eigen::RowVector3d COLOR_GREEN = Eigen::RowVector3d(0.05, 0.9, 0.05);
 Eigen::MatrixXd vertices;
 Eigen::MatrixXi faces;
 Graph graph;
-vector<Edge> tree;
-vector<Edge> cotree;
-vector<Edge> remainingEdges;
-vector<pair<Graph, map<pair<int, int>, pair<int, int>>>> cycleGraphs;
+vector<vector<Edge>> tree;
+vector<vector<Edge>> cotree;
+vector<vector<Edge>> remainingEdges;
+vector<vector<pair<Graph, map<VertexPair, VertexPair>>>> cycleGraphs;
+vector<pair<int, double>> minCostsAndIndices;
 
 int cycleIndex = 0;
+int iteration = 0;
 char lastKeyPressed = '1';
 
 bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier) {
 
-  lastKeyPressed = (key != '=')? key: lastKeyPressed;
+  lastKeyPressed = (key != '=' && key != 'N')? key: lastKeyPressed;
 
   if(key == '1') {
+    //Basic mesh
 
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
@@ -42,6 +40,7 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
 
   }
   else if(key == '2') {
+    //Primal and dual
 
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
@@ -52,6 +51,7 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.core().align_camera_center(vertices, faces);
   }
   else if(key == '3') {
+    //Dual vertices a.k.a. face centers
 
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
@@ -61,6 +61,7 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.core().align_camera_center(vertices, faces);
   }
   else if(key == '4') {
+    //Random visualizer for a single primal and dual
 
     pair<Visualizer, Visualizer> randomVisualizers = graph.getRandomPrimalAndDualVisualizer(1);
 
@@ -73,9 +74,10 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.core().align_camera_center(vertices, faces);
   }
   else if(key == '5') {
+    //Tree and cotree
 
-    Visualizer treeVisualizer = graph.getTreeVisualizer(tree);
-    Visualizer cotreeVisualizer = graph.getCotreeVisualizer(cotree);
+    Visualizer treeVisualizer = graph.getTreeVisualizer(tree[iteration]);
+    Visualizer cotreeVisualizer = graph.getCotreeVisualizer(cotree[iteration]);
 
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
@@ -86,9 +88,10 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.core().align_camera_center(vertices, faces);
   }
   else if(key == '6') {
+    //Remaining edge
 
-    Visualizer treeVisualizer = graph.getTreeVisualizer(tree);
-    Visualizer remainingVisualizer = graph.getTreeVisualizer(remainingEdges);
+    Visualizer treeVisualizer = graph.getTreeVisualizer(tree[iteration]);
+    Visualizer remainingVisualizer = graph.getTreeVisualizer(remainingEdges[iteration]);
 
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
@@ -99,19 +102,21 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.core().align_camera_center(vertices, faces);
   }
   else if(key == '7') {
+    //Cycle graph (tree) with weights assigned
 
     viewer.data().clear();
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = false;
-    viewer.data().add_edges(cycleGraphs[cycleIndex].first.getPrimalVisualizer().vertices1, cycleGraphs[cycleIndex].first.getPrimalVisualizer().vertices2, Eigen::RowVector3d(0.1, 0.9, 0.1));
-    viewer.data().add_points(graph.getVerticesForEdge(remainingEdges[cycleIndex]), COLOR_RED);
+    viewer.data().add_edges(cycleGraphs[iteration][cycleIndex].first.getPrimalVisualizer().vertices1, cycleGraphs[iteration][cycleIndex].first.getPrimalVisualizer().vertices2, Eigen::RowVector3d(0.1, 0.9, 0.1));
+    viewer.data().add_points(graph.getVerticesForEdge(remainingEdges[iteration][cycleIndex]), COLOR_RED);
     viewer.data().line_width = 2.0f;
     viewer.data().point_size = 8.0f;
     viewer.core().align_camera_center(vertices, faces);
   }
   else if(key == '8') {
+    //Cycle with an edge introduced (using cycle graph's vertex mapping)
 
-    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[cycleIndex].first.findPathBetweenSourceAndTarget();
+    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[iteration][cycleIndex].first.findPathBetweenSourceAndTarget();
 
     Visualizer cycleVisualizer = Graph::getCycleVisualizer(path.first, path.second);
 
@@ -119,16 +124,17 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = false;
     viewer.data().add_edges(cycleVisualizer.vertices1, cycleVisualizer.vertices2, COLOR_GREEN);
-    viewer.data().add_points(cycleGraphs[cycleIndex].first.getSourceAndTarget(), COLOR_RED);
+    viewer.data().add_points(cycleGraphs[iteration][cycleIndex].first.getSourceAndTargetVisualizer(), COLOR_RED);
     viewer.data().line_width = 2.0f;
     viewer.data().point_size = 8.0f;
     viewer.core().align_camera_center(vertices, faces);
   }
   else if(key == '9') {
+    //Cycle with an edge introduced (using primal graph's vertex mapping)
 
-    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[cycleIndex].first.findPathBetweenSourceAndTarget();
+    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[iteration][cycleIndex].first.findPathBetweenSourceAndTarget();
 
-    vector<VertexPair> originalPath = cycleGraphs[cycleIndex].first.getPathBetweenSourceAndTarget(path.first, cycleGraphs[cycleIndex].second);
+    vector<VertexPair> originalPath = cycleGraphs[iteration][cycleIndex].first.getPathBetweenSourceAndTarget(path.first, cycleGraphs[iteration][cycleIndex].second);
 
     Visualizer cycleVisualizer = graph.getVisualizerFromCycleGraph(originalPath);
 
@@ -136,14 +142,25 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().set_mesh(vertices, faces);
     viewer.data().show_lines = false;
     viewer.data().add_edges(cycleVisualizer.vertices1, cycleVisualizer.vertices2, COLOR_GREEN);
-    viewer.data().add_points(cycleGraphs[cycleIndex].first.getSourceAndTarget(), COLOR_RED);
+    viewer.data().add_points(cycleGraphs[iteration][cycleIndex].first.getSourceAndTargetVisualizer(), COLOR_RED);
     viewer.data().line_width = 2.0f;
     viewer.data().point_size = 8.0f;
     viewer.core().align_camera_center(vertices, faces);
   }
+  else if(key == '0') {
+
+    Visualizer nearZeroVisualizer = graph.getEdgeVisualizerUnderWeight(0.0001);
+
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().show_lines = false;
+    viewer.data().add_edges(nearZeroVisualizer.vertices1, nearZeroVisualizer.vertices2, COLOR_RED);
+    viewer.data().line_width = 2.0f;
+    viewer.core().align_camera_center(vertices, faces);
+  }
   else if(key == '=') {
 
-    cycleIndex = (cycleIndex + 1) % cycleGraphs.size();
+    cycleIndex = (cycleIndex + 1) % cycleGraphs[iteration].size();
 
     cout << "Index incremented to " << cycleIndex << endl;
 
@@ -152,8 +169,42 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
       return keyDown(viewer, lastKeyPressed, modifier);
     }
   }
+  else if(key == 'N') {
+
+    iteration = (iteration + 1) % cycleGraphs.size();
+
+    cout << "Selected iteration " << iteration << endl;
+
+    cycleIndex = 0;
+
+    cout << "Changed index to " << cycleIndex << endl;
+
+    if(lastKeyPressed > '7') {
+
+      return keyDown(viewer, lastKeyPressed, modifier);
+    }
+  }
 
   return false;
+}
+
+void printHelper() {
+
+  cout << "================================================" << endl;
+  cout << "Keys and functionalities" << endl;
+  cout << "1\tBase model" << endl;
+  cout << "2\tPrimal and dual graph" << endl;
+  cout << "3\tDual vertices a.k.a. face centers" << endl;
+  cout << "4\tRandomly picked specified # of primal and dual edges" << endl;
+  cout << "5\tTree and cotree" << endl;
+  cout << "6\tRemaining edge" << endl;
+  cout << "7\tCycle graph generated from tree" << endl;
+  cout << "8\tCycle with an edge introduced (using cycle graph's vertex mapping)" << endl;
+  cout << "9\tCycle with an edge introduced (using primal graph's vertex mapping)" << endl;
+  cout << "0\tAlmost zero edges visualizer" << endl;
+  cout << "=\tGo to next cycle" << endl;
+  cout << "n\tGo to next iteration" << endl;
+  cout << "================================================" << endl;
 }
 
 int main(int argc, char *argv[]) {
@@ -167,28 +218,69 @@ int main(int argc, char *argv[]) {
   map<Edge, double> minCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.minimalDirection);
   map<Edge, double> maxCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.maximalDirection);
 
-  vector<Edge> edgesToRemove;
-  tree = graph.buildTree(edgesToRemove, maxCost);
-  cotree = graph.buildCotree(tree, maxCost);
+  for(int x = 0; x < 4; x++) {
 
-  cout << "Tree edges (#): " << tree.size() << endl;
-  cout << "Cotree edges (#): " << cotree.size() << endl;
+    vector<pair<Graph, map<VertexPair, VertexPair>>> newCycleGraphs;
 
-  remainingEdges = graph.remainingEdges(tree, cotree);
+    if(x%2) {
+      cout << "Iteration [" << x << "]: maximal curvature direction" << endl; 
 
-  for(int i = 0; i < remainingEdges.size(); i++) {
-    Graph cycleGraph;
-    map<pair<int, int>, pair<int, int>> cycleToOriginal = cycleGraph.buildGraphFromVerticesAndEdges(
-      graph.getPrimalBoostGraph(), graph.getPrimalVertices(), tree, remainingEdges[i]);
+      vector<Edge> edgesToRemove;
 
-    cycleGraphs.push_back(pair<Graph, map<pair<int, int>, pair<int, int>>>(cycleGraph, cycleToOriginal));
+      tree.push_back(graph.buildTree(edgesToRemove, maxCost));
+      cotree.push_back(graph.buildCotree(tree[x], maxCost));
+    }
+    else {
+      cout << "Iteration [" << x << "]: minimal curvature direction" << endl;
 
-    auto path = cycleGraph.findPathBetweenSourceAndTarget();
+      vector<Edge> edgesToRemove;
+      
+      tree.push_back(graph.buildTree(edgesToRemove, minCost));
+      cotree.push_back(graph.buildCotree(tree[x], minCost));
+    }
 
-    Cycle cycle(path.second, path.first);
+    cout << "Tree edges (#): " << tree[x].size() << endl;
+    cout << "Cotree edges (#): " << cotree[x].size() << endl;
 
-    cout << "Cycle " << i << ": " << cycle.getCycleCost() << endl;
+    remainingEdges.push_back(graph.remainingEdges(tree[x], cotree[x]));
+
+    pair<int, double> minCostAndIndex(-1, 99999);
+
+    for(int i = 0; i < remainingEdges[x].size(); i++) {
+      Graph cycleGraph;
+      map<pair<int, int>, pair<int, int>> cycleToOriginal = cycleGraph.buildGraphFromVerticesAndEdges(
+        graph.getPrimalBoostGraph(), graph.getPrimalVertices(), tree[x], remainingEdges[x][i]);
+
+      newCycleGraphs.push_back(pair<Graph, map<pair<int, int>, pair<int, int>>>(cycleGraph, cycleToOriginal));
+
+      auto path = cycleGraph.findPathBetweenSourceAndTarget();
+
+      Cycle cycle(path.second, path.first);
+
+      cout << "Cycle " << i << ": " << cycle.getCycleCost() << endl;
+
+      if(minCostAndIndex.second > cycle.getCycleCost()) {
+
+        minCostAndIndex.second = cycle.getCycleCost();
+        minCostAndIndex.first = i;
+      }
+    }
+
+    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = newCycleGraphs[minCostAndIndex.first].first.findPathBetweenSourceAndTarget();
+
+    vector<VertexPair> originalPath = newCycleGraphs[minCostAndIndex.first].first.getPathBetweenSourceAndTarget(path.first, newCycleGraphs[cycleIndex].second);
+
+    graph.assignWeightsTo(originalPath, minCost);
+    graph.assignWeightsTo(originalPath, maxCost);
+
+    cycleGraphs.push_back(newCycleGraphs);
+
+    cout << minCostAndIndex.first << " is the minimum cost cycle with cost " << minCostAndIndex.second << endl;
+
+    minCostsAndIndices.push_back(minCostAndIndex);
   }
+
+  printHelper();
 
   igl::opengl::glfw::Viewer viewer;
   viewer.data().set_mesh(vertices, faces);

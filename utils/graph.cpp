@@ -188,8 +188,6 @@ void Graph::buildGraphFromVerticesAndFaces(const Eigen::MatrixXd vertices, const
     cout << "Graph constructed" << endl;
     cout << "Edges: " << boost::num_edges(graph) << endl;
     cout << "Vertices: " << boost::num_vertices(graph) << endl;
-
-    //printGraphInformatiaon();
 }
 
 Visualizer Graph::getPrimalVisualizer() {
@@ -306,7 +304,7 @@ UndirectedGraph Graph::getDualBoostGraph() {
     return this->dual;
 }
 
-vector<Edge> Graph::buildTree(vector<Edge> primalEdgesToRemove, map<Edge, double> weights) {
+vector<Edge> Graph::buildTree(vector<Edge> primalEdgesToRemove, map<Edge, double> &weights) {
 
     vector<Edge> spanningTree;
 
@@ -514,7 +512,7 @@ Eigen::MatrixXd Graph::getVerticesForEdge(Edge edge) {
     return vertices;
 }
 
-Eigen::MatrixXd Graph::getSourceAndTarget() {
+Eigen::MatrixXd Graph::getSourceAndTargetVisualizer() {
 
     assert(this->source != -1 && this->target != -1);
 
@@ -529,8 +527,8 @@ Eigen::MatrixXd Graph::getSourceAndTarget() {
 Visualizer Graph::getVisualizerFromCycleGraph(vector<VertexPair> originalMapFromCycleEdges) {
 
     Visualizer visualizer;
-    visualizer.vertices1 = Eigen::MatrixXd::Zero(originalMapFromCycleEdges.size(), 3);
-    visualizer.vertices2 = Eigen::MatrixXd::Zero(originalMapFromCycleEdges.size(), 3);
+    visualizer.vertices1 = Eigen::MatrixXd::Zero(originalMapFromCycleEdges.size()+1, 3);
+    visualizer.vertices2 = Eigen::MatrixXd::Zero(originalMapFromCycleEdges.size()+1, 3);
 
     int index = 0;
 
@@ -542,28 +540,22 @@ Visualizer Graph::getVisualizerFromCycleGraph(vector<VertexPair> originalMapFrom
         visualizer.vertices1.row(index) = this->vertices[source];
         visualizer.vertices2.row(index) = this->vertices[target];
     }
-
-    cout << "Path length: " << index << endl;
     
     return visualizer;
 }
 
 vector<VertexPair> Graph::getPathBetweenSourceAndTarget(vector<Vertex> &path, map<VertexPair, VertexPair> &cycleToOriginal) {
 
+    assert(source != -1 && target != -1);
+
     vector<VertexPair> originalEdges;
-
-    cout << cycleToOriginal.size() << endl;
-
-    cout << boost::num_edges(this->graph) << endl;
-
-    cout << "Path length from cycle: " <<  path.size() << endl;
 
     for(int i = 0; i < path.size()-1; i++) {
 
         int source = boost::vertex(path[i], this->graph);
         int target = boost::vertex(path[i+1], this->graph);
 
-        //TODO: Dangerous grounds (a, b) does not resolve to (b, a)
+        //TODO: Dangerous grounds (a, b) does not resolve to (b, a) [use the alternative]
 
         if(cycleToOriginal.find(VertexPair (source, target)) != cycleToOriginal.end()) {
 
@@ -573,10 +565,115 @@ vector<VertexPair> Graph::getPathBetweenSourceAndTarget(vector<Vertex> &path, ma
 
             originalEdges.push_back(cycleToOriginal[pair<int, int>(target, source)]);
         }
-         
     }
 
-    cout << "Path length from original: " << originalEdges.size() << endl;
+    cout << this->source << " " << this->target << endl;
+    originalEdges.push_back(Graph::queryUndirectedMap(this->source, this->target, cycleToOriginal));
 
     return originalEdges;
+}
+
+pair<vector<Eigen::RowVector3d>, vector<double>> Graph::getWeightLabels() {
+
+    EdgeIterator it, itEnd;
+
+    vector<Eigen::RowVector3d> vertexPositions;
+    vector<double> labels;
+
+    for(tie(it, itEnd) = boost::edges(this->graph); it != itEnd; it++) {
+
+        double weight = boost::get(boost::edge_weight_t(), this->graph, *it);
+
+        Vertex source = boost::source(*it, this->graph);
+        Vertex target = boost::target(*it, this->graph);
+
+        Eigen::RowVector3d position = (this->vertices[source] + this->vertices[target]) / 2.0;
+
+        vertexPositions.push_back(position);
+        labels.push_back(weight);
+    }
+
+    return pair<vector<Eigen::RowVector3d>, vector<double>>(vertexPositions, labels);
+}
+
+Visualizer Graph::getEdgeVisualizerUnderWeight(double weight) {
+
+    Visualizer visualizer;
+    visualizer.vertices1 = Eigen::MatrixXd::Zero(boost::num_edges(this->graph), 3);
+    visualizer.vertices2 = Eigen::MatrixXd::Zero(boost::num_edges(this->graph), 3);
+
+    EdgeIterator it, itEnd;
+
+    int index = 0;
+    for(tie(it, itEnd) = boost::edges(this->graph); it != itEnd; it++, index++) {
+
+        if(boost::get(boost::edge_weight_t(), this->graph, *it) > weight) {
+
+            continue;
+        }
+
+        Vertex source = boost::source(*it, graph);
+        Vertex target = boost::target(*it, graph);
+
+        visualizer.vertices1.row(index) = vertices[source];
+        visualizer.vertices2.row(index) = vertices[target];
+    }
+
+    return visualizer;
+}
+
+double Graph::getEdgeWeight(int source, int target) {
+
+    pair<Edge, bool> edge = boost::edge(source, target, this->graph);
+
+    if(edge.second) {
+
+        return boost::get(boost::edge_weight_t(), this->graph, edge.first);
+    }
+
+    return -99999.0;
+}
+
+VertexPair Graph::queryUndirectedMap(int source, int target, map<VertexPair, VertexPair> &undirectedMap) {
+
+    VertexPair defaultResult(-1, -1);
+
+    if(undirectedMap.find(VertexPair (source, target)) != undirectedMap.end()) {
+
+        return undirectedMap[pair<int, int>(source, target)];
+    }
+    else if(undirectedMap.find(VertexPair (target, source)) != undirectedMap.end()){
+
+        return undirectedMap[pair<int, int>(target, source)];
+    }
+
+    return defaultResult;
+}
+
+void Graph::assignWeightsTo(vector<VertexPair> cycle, map<Edge, double> &weightMatrix, double weight) {
+
+    cout << "Assiging weight " << weight << " to " << cycle.size() << " edges." << endl;
+
+    for(int i = 0; i < cycle.size(); i++) {
+
+        Vertex source = boost::vertex(cycle[i].first, this->graph);
+        Vertex target = boost::vertex(cycle[i].second, this->graph);
+
+        pair<Edge, bool> edge = boost::edge(source, target, this->graph);
+
+        if(edge.second && weightMatrix.find(edge.first) != weightMatrix.end()) {
+
+            weightMatrix[edge.first] = weight;
+        }
+        else {
+
+            cout << "[Assigning weights to 0] Edge does not exist between " << edge.first << " from input [" << cycle[i].first << ", " << cycle[i].second << "]" << endl; 
+        }
+    }
+}
+
+
+VertexPair Graph::getSourceAndTarget() {
+
+    return VertexPair((int)source, (int)target);
 }
