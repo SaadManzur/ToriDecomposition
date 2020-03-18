@@ -215,8 +215,8 @@ int main(int argc, char *argv[]) {
   
   Curvature curvature;
   computeCurvature(vertices, faces, curvature);
-  map<Edge, double> minCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.minimalDirection);
-  map<Edge, double> maxCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.maximalDirection);
+  map<VertexPair, double> minCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.minimalDirection);
+  map<VertexPair, double> maxCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.maximalDirection);
 
   for(int x = 0; x < 4; x++) {
 
@@ -251,13 +251,13 @@ int main(int argc, char *argv[]) {
       map<pair<int, int>, pair<int, int>> cycleToOriginal = cycleGraph.buildGraphFromVerticesAndEdges(
         graph.getPrimalBoostGraph(), graph.getPrimalVertices(), tree[x], remainingEdges[x][i]);
 
+      VertexPair found = Graph::queryUndirectedMap(cycleGraph.getSourceAndTarget().first, cycleGraph.getSourceAndTarget().second, cycleToOriginal);
+
       newCycleGraphs.push_back(pair<Graph, map<pair<int, int>, pair<int, int>>>(cycleGraph, cycleToOriginal));
 
       auto path = cycleGraph.findPathBetweenSourceAndTarget();
 
       Cycle cycle(path.second, path.first);
-
-      cout << "Cycle " << i << ": " << cycle.getCycleCost() << endl;
 
       if(minCostAndIndex.second > cycle.getCycleCost()) {
 
@@ -268,7 +268,7 @@ int main(int argc, char *argv[]) {
 
     pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = newCycleGraphs[minCostAndIndex.first].first.findPathBetweenSourceAndTarget();
 
-    vector<VertexPair> originalPath = newCycleGraphs[minCostAndIndex.first].first.getPathBetweenSourceAndTarget(path.first, newCycleGraphs[cycleIndex].second);
+    vector<VertexPair> originalPath = newCycleGraphs[minCostAndIndex.first].first.getPathBetweenSourceAndTarget(path.first, newCycleGraphs[minCostAndIndex.first].second);
 
     graph.assignWeightsTo(originalPath, minCost);
     graph.assignWeightsTo(originalPath, maxCost);

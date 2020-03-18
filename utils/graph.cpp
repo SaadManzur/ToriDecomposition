@@ -5,7 +5,7 @@ Graph::Graph() {
     srand(time(NULL));
 }
 
-map<pair<int, int>, pair<int, int>> Graph::buildGraphFromVerticesAndEdges(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, vector<Edge> edges, Edge edgeToAdd) {
+map<pair<int, int>, pair<int, int>> Graph::buildGraphFromVerticesAndEdges(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, vector<Edge> edges, Edge &edgeToAdd) {
     
     map<pair<int, int>, pair<int, int>> cycleToOriginal;
     map<Vertex, Vertex> originalToTemp;
@@ -304,15 +304,18 @@ UndirectedGraph Graph::getDualBoostGraph() {
     return this->dual;
 }
 
-vector<Edge> Graph::buildTree(vector<Edge> primalEdgesToRemove, map<Edge, double> &weights) {
+vector<Edge> Graph::buildTree(vector<Edge> primalEdgesToRemove, map<VertexPair, double> &weights) {
 
     vector<Edge> spanningTree;
 
     EdgeIterator it, itEnd;
 
     for(tie(it, itEnd) = boost::edges(graph); it != itEnd; it++) {
+        
+        int source = boost::source(*it, this->graph);
+        int target = boost::target(*it, this->graph);
 
-        boost::put(boost::edge_weight_t(), graph, *it, weights[*it]);
+        boost::put(boost::edge_weight_t(), graph, *it, getWeightFromVertexPair(source, target, weights));
     }
 
     for(vector<Edge>::iterator it = primalEdgesToRemove.begin(); it != primalEdgesToRemove.end(); it++) {
@@ -327,7 +330,7 @@ vector<Edge> Graph::buildTree(vector<Edge> primalEdgesToRemove, map<Edge, double
     return spanningTree;
 }
 
-vector<Edge> Graph::buildCotree(vector<Edge> primalEdgesToRemove, map<Edge, double> weights) {
+vector<Edge> Graph::buildCotree(vector<Edge> primalEdgesToRemove, map<VertexPair, double> &weights) {
 
     vector<Edge> spanningTree;
 
@@ -335,15 +338,16 @@ vector<Edge> Graph::buildCotree(vector<Edge> primalEdgesToRemove, map<Edge, doub
 
     for(tie(it, itEnd) = boost::edges(dual); it != itEnd; it++) {
 
-        boost::put(boost::edge_weight_t(), dual, *it, -1.0*weights[dualToPrimal[*it]]);
+        int source = boost::source(dualToPrimal[*it], this->graph);
+        int target = boost::target(dualToPrimal[*it], this->graph);
+
+        boost::put(boost::edge_weight_t(), dual, *it, -1.0*getWeightFromVertexPair(source, target, weights));
     }
 
     for(vector<Edge>::iterator it = primalEdgesToRemove.begin(); it != primalEdgesToRemove.end(); it++) {
 
         boost::put(boost::edge_weight_t(), dual, primalToDual[*it], 9999);
     }
-
-    cout << "Weights assigned" << endl;
 
     boost::kruskal_minimum_spanning_tree(dual, back_inserter(spanningTree));
 
@@ -555,19 +559,9 @@ vector<VertexPair> Graph::getPathBetweenSourceAndTarget(vector<Vertex> &path, ma
         int source = boost::vertex(path[i], this->graph);
         int target = boost::vertex(path[i+1], this->graph);
 
-        //TODO: Dangerous grounds (a, b) does not resolve to (b, a) [use the alternative]
-
-        if(cycleToOriginal.find(VertexPair (source, target)) != cycleToOriginal.end()) {
-
-            originalEdges.push_back(cycleToOriginal[pair<int, int>(source, target)]);   
-        }
-        else {
-
-            originalEdges.push_back(cycleToOriginal[pair<int, int>(target, source)]);
-        }
+       originalEdges.push_back(queryUndirectedMap(source, target, cycleToOriginal));
     }
 
-    cout << this->source << " " << this->target << endl;
     originalEdges.push_back(Graph::queryUndirectedMap(this->source, this->target, cycleToOriginal));
 
     return originalEdges;
@@ -650,7 +644,7 @@ VertexPair Graph::queryUndirectedMap(int source, int target, map<VertexPair, Ver
     return defaultResult;
 }
 
-void Graph::assignWeightsTo(vector<VertexPair> cycle, map<Edge, double> &weightMatrix, double weight) {
+void Graph::assignWeightsTo(vector<VertexPair> cycle, map<VertexPair, double> &weightMatrix, double weight) {
 
     cout << "Assiging weight " << weight << " to " << cycle.size() << " edges." << endl;
 
@@ -659,15 +653,9 @@ void Graph::assignWeightsTo(vector<VertexPair> cycle, map<Edge, double> &weightM
         Vertex source = boost::vertex(cycle[i].first, this->graph);
         Vertex target = boost::vertex(cycle[i].second, this->graph);
 
-        pair<Edge, bool> edge = boost::edge(source, target, this->graph);
+        if(!setWeightToVertexPair(source, target, weightMatrix, weight)) {
 
-        if(edge.second && weightMatrix.find(edge.first) != weightMatrix.end()) {
-
-            weightMatrix[edge.first] = weight;
-        }
-        else {
-
-            cout << "[Assigning weights to 0] Edge does not exist between " << edge.first << " from input [" << cycle[i].first << ", " << cycle[i].second << "]" << endl; 
+            cout << "[Assigning weights to 0] Edge does not exist between [" << cycle[i].first << ", " << cycle[i].second << "]" << endl; 
         }
     }
 }
@@ -676,4 +664,49 @@ void Graph::assignWeightsTo(vector<VertexPair> cycle, map<Edge, double> &weightM
 VertexPair Graph::getSourceAndTarget() {
 
     return VertexPair((int)source, (int)target);
+}
+
+
+double Graph::getWeightFromVertexPair(int source, int target, map<VertexPair, double> &weights) {
+
+    double defaultResult = -5;
+
+    if(weights.find(VertexPair (source, target)) != weights.end()) {
+
+        return weights[pair<int, int>(source, target)];
+    }
+    else if(weights.find(VertexPair (target, source)) != weights.end()){
+
+        return weights[pair<int, int>(target, source)];
+    }
+    else {
+
+        cout << "Weight not found for " << source << ", " << target << endl;
+    }
+
+    return defaultResult;
+}
+
+bool Graph::setWeightToVertexPair(int source, int target, map<VertexPair, double> &weights, double weight) {
+
+    bool defaultResult = false;
+
+    if(weights.find(VertexPair (source, target)) != weights.end()) {
+
+        weights[pair<int, int>(source, target)] = weight;
+
+        return true;
+    }
+    else if(weights.find(VertexPair (target, source)) != weights.end()){
+
+        weights[pair<int, int>(target, source)] = weight;
+
+        return true;
+    }
+    else {
+
+        cout << "Weight not found for " << source << ", " << target << endl;
+    }
+
+    return defaultResult;
 }

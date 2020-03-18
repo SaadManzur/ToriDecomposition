@@ -24,7 +24,7 @@ Visualizer getCurvatureVisualization(const Eigen::MatrixXd vertices, const Eigen
     return visualizer;
 }
 
-map<Edge, double> computeEdgeWeights(
+map<VertexPair, double> computeEdgeWeights(
     
         UndirectedGraph graph,
         map<Vertex, Eigen::RowVector3d> vertices,
@@ -32,7 +32,7 @@ map<Edge, double> computeEdgeWeights(
         const Eigen::MatrixXd directions
     ) {
 
-    map<Edge, double> weights;
+    map<VertexPair, double> weights;
 
     double minWeight = 9000;
     double maxWeight = -1.0;
@@ -51,14 +51,13 @@ map<Edge, double> computeEdgeWeights(
         double product1 = acos(abs(vector.dot(direction1)));
         double product2 = acos(abs(vector.dot(direction2)));
 
-        weights.insert(pair<Edge, double>(*it, (product1 + product2) / 2.0));
+        weights.insert(pair<VertexPair, double>(VertexPair (source, target), (product1 + product2) / 2.0));
 
-        minWeight = (minWeight > weights[*it])? weights[*it]: minWeight;
-        maxWeight = (maxWeight < weights[*it])? weights[*it]: maxWeight;
+        minWeight = (minWeight > weights[VertexPair (source, target)])? weights[VertexPair (source, target)]: minWeight;
+        maxWeight = (maxWeight < weights[VertexPair (source, target)])? weights[VertexPair (source, target)]: maxWeight;
     }
 
     cout << "(Weight Compute) Min weight: " << minWeight << " Max weight: " << maxWeight << endl;
 
     return weights;
 }
-

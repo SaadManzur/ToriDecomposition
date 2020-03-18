@@ -20,6 +20,6 @@ void computeCurvature(const Eigen::MatrixXd vertices, const Eigen::MatrixXi face
 
 Visualizer getCurvatureVisualization(const Eigen::MatrixXd vertices, const Eigen::MatrixXd directions, int length=3);
 
-map<Edge, double> computeEdgeWeights(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, pair<EdgeIterator, EdgeIterator> edges, const Eigen::MatrixXd directions);
+map<VertexPair, double> computeEdgeWeights(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, pair<EdgeIterator, EdgeIterator> edges, const Eigen::MatrixXd directions);
 
 #endif

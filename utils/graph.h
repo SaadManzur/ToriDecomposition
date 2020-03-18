@@ -70,10 +70,10 @@ public:
     Graph();
 
     void buildGraphFromVerticesAndFaces(const Eigen::MatrixXd vertices, const Eigen::MatrixXi faces);
-    map<VertexPair, VertexPair> buildGraphFromVerticesAndEdges(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, vector<Edge> edges, Edge edgeToAdd);
+    map<VertexPair, VertexPair> buildGraphFromVerticesAndEdges(UndirectedGraph graph, map<Vertex, Eigen::RowVector3d> vertices, vector<Edge> edges, Edge &edgeToAdd);
     map<Vertex, Eigen::RowVector3d> getVerticesForEdges(vector<Edge> edges);
     Eigen::MatrixXd getVerticesForEdge(Edge edge);
-    void assignWeightsTo(vector<VertexPair> cycle, map<Edge, double> &weightMatrix, double weight=0.0);
+    void assignWeightsTo(vector<VertexPair> cycle, map<VertexPair, double> &weightMatrix, double weight=0.0);
     VertexPair getSourceAndTarget();
 
     Eigen::MatrixXd getDualVerticesAsMatrix();
@@ -82,8 +82,8 @@ public:
     pair<EdgeIterator, EdgeIterator> getPrimalEdges();
     UndirectedGraph getPrimalBoostGraph();
     UndirectedGraph getDualBoostGraph();
-    vector<Edge> buildTree(vector<Edge> edgesToRemove, map<Edge, double> &weights);
-    vector<Edge> buildCotree(vector<Edge> edgesToRemove, map<Edge, double> weights);
+    vector<Edge> buildTree(vector<Edge> edgesToRemove, map<VertexPair, double> &weights);
+    vector<Edge> buildCotree(vector<Edge> edgesToRemove, map<VertexPair, double> &weights);
     vector<Edge> remainingEdges(vector<Edge> edgesToExcludePrimal, vector<Edge> edgesToExcludeDual);
     pair<vector<Vertex>, vector<Eigen::RowVector3d>> findPathBetweenSourceAndTarget();
     static Visualizer getCycleVisualizer(vector<Vertex> path, vector<Eigen::RowVector3d> pathPositions);
@@ -102,6 +102,8 @@ public:
     double getEdgeWeight(int source, int target);
 
     static VertexPair queryUndirectedMap (int source, int target, map<VertexPair, VertexPair> &undirectedMap);
+    static double getWeightFromVertexPair(int source, int target, map<VertexPair, double> &weights);
+    static bool setWeightToVertexPair(int source, int target, map<VertexPair, double> &weights, double weight);
 };
 
 #endif
