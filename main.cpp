@@ -9,6 +9,10 @@
 
 using namespace std;
 
+#define DECAY_RATE 0.01
+
+double GOOD_THRESHOLD = 1000;
+
 Eigen::RowVector3d COLOR_RED = Eigen::RowVector3d(0.9, 0.05, 0.05);
 Eigen::RowVector3d COLOR_BLUE = Eigen::RowVector3d(0.05, 0.05, 0.9);
 Eigen::RowVector3d COLOR_GREEN = Eigen::RowVector3d(0.05, 0.9, 0.05);
@@ -22,7 +26,10 @@ vector<vector<Edge>> remainingEdges;
 vector<vector<pair<Graph, map<VertexPair, VertexPair>>>> cycleGraphs;
 vector<pair<int, double>> minCostsAndIndices;
 
+vector<int> goodCycles;
+
 int cycleIndex = 0;
+int goodCycleIndex = 0;
 int iteration = 0;
 char lastKeyPressed = '1';
 
@@ -114,22 +121,6 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.core().align_camera_center(vertices, faces);
   }
   else if(key == '8') {
-    //Cycle with an edge introduced (using cycle graph's vertex mapping)
-
-    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[iteration][cycleIndex].first.findPathBetweenSourceAndTarget();
-
-    Visualizer cycleVisualizer = Graph::getCycleVisualizer(path.first, path.second);
-
-    viewer.data().clear();
-    viewer.data().set_mesh(vertices, faces);
-    viewer.data().show_lines = false;
-    viewer.data().add_edges(cycleVisualizer.vertices1, cycleVisualizer.vertices2, COLOR_GREEN);
-    viewer.data().add_points(cycleGraphs[iteration][cycleIndex].first.getSourceAndTargetVisualizer(), COLOR_RED);
-    viewer.data().line_width = 2.0f;
-    viewer.data().point_size = 8.0f;
-    viewer.core().align_camera_center(vertices, faces);
-  }
-  else if(key == '9') {
     //Cycle with an edge introduced (using primal graph's vertex mapping)
 
     pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[iteration][cycleIndex].first.findPathBetweenSourceAndTarget();
@@ -143,6 +134,24 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
     viewer.data().show_lines = false;
     viewer.data().add_edges(cycleVisualizer.vertices1, cycleVisualizer.vertices2, COLOR_GREEN);
     viewer.data().add_points(cycleGraphs[iteration][cycleIndex].first.getSourceAndTargetVisualizer(), COLOR_RED);
+    viewer.data().line_width = 2.0f;
+    viewer.data().point_size = 8.0f;
+    viewer.core().align_camera_center(vertices, faces);
+  }
+  else if(key == '9') {
+    //Good cycles
+
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().show_lines = false;
+    for(int i = 0; i < goodCycles.size(); i++) {
+      pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[cycleGraphs.size()-1][goodCycles[i]].first.findPathBetweenSourceAndTarget();
+
+      Visualizer cycleVisualizer = Graph::getCycleVisualizer(path.first, path.second);
+
+      viewer.data().add_edges(cycleVisualizer.vertices1, cycleVisualizer.vertices2, COLOR_GREEN);
+      viewer.data().add_points(cycleGraphs[cycleGraphs.size()-1][goodCycles[i]].first.getSourceAndTargetVisualizer(), COLOR_RED);
+    }
     viewer.data().line_width = 2.0f;
     viewer.data().point_size = 8.0f;
     viewer.core().align_camera_center(vertices, faces);
@@ -184,6 +193,24 @@ bool keyDown(igl::opengl::glfw::Viewer &viewer, unsigned char key, int modifier)
       return keyDown(viewer, lastKeyPressed, modifier);
     }
   }
+  else if(key == 'G') {
+
+    cout << "Showing good cycle = " << goodCycleIndex << endl;
+
+    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = cycleGraphs[cycleGraphs.size()-1][goodCycleIndex].first.findPathBetweenSourceAndTarget();
+    Visualizer cycleVisualizer = Graph::getCycleVisualizer(path.first, path.second);
+
+    viewer.data().clear();
+    viewer.data().set_mesh(vertices, faces);
+    viewer.data().show_lines = false;
+    viewer.data().add_edges(cycleVisualizer.vertices1, cycleVisualizer.vertices2, COLOR_GREEN);
+    viewer.data().add_points(cycleGraphs[cycleGraphs.size()-1][goodCycleIndex].first.getSourceAndTargetVisualizer(), COLOR_RED);
+    viewer.data().line_width = 2.0f;
+    viewer.data().point_size = 8.0f;
+    viewer.core().align_camera_center(vertices, faces);
+
+    goodCycleIndex = (goodCycleIndex + 1) % goodCycles.size();
+  }
 
   return false;
 }
@@ -199,8 +226,8 @@ void printHelper() {
   cout << "5\tTree and cotree" << endl;
   cout << "6\tRemaining edge" << endl;
   cout << "7\tCycle graph generated from tree" << endl;
-  cout << "8\tCycle with an edge introduced (using cycle graph's vertex mapping)" << endl;
-  cout << "9\tCycle with an edge introduced (using primal graph's vertex mapping)" << endl;
+  cout << "8\tCycle with an edge introduced (using primal graph's vertex mapping)" << endl;
+  cout << "9\tGood cycles" << endl;
   cout << "0\tAlmost zero edges visualizer" << endl;
   cout << "=\tGo to next cycle" << endl;
   cout << "n\tGo to next iteration" << endl;
@@ -212,13 +239,20 @@ int main(int argc, char *argv[]) {
   readFile("../models/fertility.off", vertices, faces);
   
   graph.buildGraphFromVerticesAndFaces(vertices, faces);
-  
+
+  cout << "Model genus: " << graph.getGenus() << endl;
+
   Curvature curvature;
   computeCurvature(vertices, faces, curvature);
   map<VertexPair, double> minCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.minimalDirection);
   map<VertexPair, double> maxCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.maximalDirection);
 
-  for(int x = 0; x < 4; x++) {
+  int prevGoodCyclesCount = 0;
+  double alpha = 2.0;
+
+  for(int x = 0; x < 3*graph.getGenus() && goodCycles.size() < 2*graph.getGenus(); x++) {
+
+    goodCycles.clear();
 
     vector<pair<Graph, map<VertexPair, VertexPair>>> newCycleGraphs;
 
@@ -239,9 +273,6 @@ int main(int argc, char *argv[]) {
       cotree.push_back(graph.buildCotree(tree[x], minCost));
     }
 
-    cout << "Tree edges (#): " << tree[x].size() << endl;
-    cout << "Cotree edges (#): " << cotree[x].size() << endl;
-
     remainingEdges.push_back(graph.remainingEdges(tree[x], cotree[x]));
 
     pair<int, double> minCostAndIndex(-1, 99999);
@@ -259,25 +290,30 @@ int main(int argc, char *argv[]) {
 
       Cycle cycle(path.second, path.first);
 
-      if(minCostAndIndex.second > cycle.getCycleCost()) {
+      if(cycle.getCycleCost(alpha) < GOOD_THRESHOLD || x == 3*graph.getGenus()-1) {
 
-        minCostAndIndex.second = cycle.getCycleCost();
-        minCostAndIndex.first = i;
+        pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = newCycleGraphs[i].first.findPathBetweenSourceAndTarget();
+
+        vector<VertexPair> originalPath = newCycleGraphs[i].first.getPathBetweenSourceAndTarget(path.first, newCycleGraphs[i].second);
+
+        goodCycles.push_back(i);
+
+        graph.assignWeightsTo(originalPath, minCost);
+        graph.assignWeightsTo(originalPath, maxCost);
       }
     }
 
-    pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = newCycleGraphs[minCostAndIndex.first].first.findPathBetweenSourceAndTarget();
-
-    vector<VertexPair> originalPath = newCycleGraphs[minCostAndIndex.first].first.getPathBetweenSourceAndTarget(path.first, newCycleGraphs[minCostAndIndex.first].second);
-
-    graph.assignWeightsTo(originalPath, minCost);
-    graph.assignWeightsTo(originalPath, maxCost);
-
     cycleGraphs.push_back(newCycleGraphs);
+    cout << "# of good cycles: " << goodCycles.size() << endl;
 
-    cout << minCostAndIndex.first << " is the minimum cost cycle with cost " << minCostAndIndex.second << endl;
+    if(goodCycles.size() == prevGoodCyclesCount) {
 
-    minCostsAndIndices.push_back(minCostAndIndex);
+      alpha *= DECAY_RATE;
+
+      cout << "Increasing threshold." << endl;
+    }
+
+    prevGoodCyclesCount = goodCycles.size();
   }
 
   printHelper();

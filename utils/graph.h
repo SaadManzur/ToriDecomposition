@@ -65,6 +65,7 @@ private:
     vector<Edge> edgesUsedForTreeCotree;
     Vertex source = -1;
     Vertex target = -1;
+    int genus = -1;
 
 public:
     Graph();
@@ -75,6 +76,7 @@ public:
     Eigen::MatrixXd getVerticesForEdge(Edge edge);
     void assignWeightsTo(vector<VertexPair> cycle, map<VertexPair, double> &weightMatrix, double weight=0.0);
     VertexPair getSourceAndTarget();
+    int getGenus();
 
     Eigen::MatrixXd getDualVerticesAsMatrix();
     Eigen::MatrixXd getPrimalVerticesAsMatrix();

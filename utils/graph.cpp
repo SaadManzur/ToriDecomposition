@@ -188,6 +188,8 @@ void Graph::buildGraphFromVerticesAndFaces(const Eigen::MatrixXd vertices, const
     cout << "Graph constructed" << endl;
     cout << "Edges: " << boost::num_edges(graph) << endl;
     cout << "Vertices: " << boost::num_vertices(graph) << endl;
+
+    this->genus = (2 - vertices.rows() - faces.rows() + boost::num_edges(this->graph))/2;
 }
 
 Visualizer Graph::getPrimalVisualizer() {
@@ -646,7 +648,7 @@ VertexPair Graph::queryUndirectedMap(int source, int target, map<VertexPair, Ver
 
 void Graph::assignWeightsTo(vector<VertexPair> cycle, map<VertexPair, double> &weightMatrix, double weight) {
 
-    cout << "Assiging weight " << weight << " to " << cycle.size() << " edges." << endl;
+    //cout << "Assiging weight " << weight << " to " << cycle.size() << " edges." << endl;
 
     for(int i = 0; i < cycle.size(); i++) {
 
@@ -660,12 +662,10 @@ void Graph::assignWeightsTo(vector<VertexPair> cycle, map<VertexPair, double> &w
     }
 }
 
-
 VertexPair Graph::getSourceAndTarget() {
 
     return VertexPair((int)source, (int)target);
 }
-
 
 double Graph::getWeightFromVertexPair(int source, int target, map<VertexPair, double> &weights) {
 
@@ -709,4 +709,11 @@ bool Graph::setWeightToVertexPair(int source, int target, map<VertexPair, double
     }
 
     return defaultResult;
+}
+
+int Graph::getGenus() {
+
+    assert(genus != -1);
+
+    return this->genus;
 }
