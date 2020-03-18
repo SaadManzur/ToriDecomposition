@@ -1,136 +1,86 @@
 #include "toriDecomposition.h"
 
-/*
-void assignMinimumWeights(vector<int> path, Eigen::MatrixXd &weightMatrix) {
+Result decomposeIntoTori(Eigen::MatrixXd vertices, Eigen::MatrixXi faces) {
 
-    for(int i = 0; i < path.size()-1; i++) {
+    Result result;
 
-        weightMatrix(path[i], path[i+1]) = 0.0;
-        weightMatrix(path[i+1], path[i]) = 0.0;
-    }
+    result.graph.buildGraphFromVerticesAndFaces(vertices, faces);
 
-    //weightMatrix(path[0], path[path.size()-1]) = 0.0;
-    //weightMatrix(path[path.size()-1], path[0]) = 0.0;
-}
-
-vector<vector<int>> decomposeIntoTori(Eigen::MatrixXd vertices, Eigen::MatrixXi faces) {
+    cout << "Model genus: " << result.graph.getGenus() << endl;
 
     Curvature curvature;
     computeCurvature(vertices, faces, curvature);
-    Visualizer maxCurvatureVisualizer = getCurvatureVisualization(vertices, curvature.maximalDirection);
-    Visualizer minCurvatureVisualizer = getCurvatureVisualization(vertices, curvature.minimalDirection);
+    map<VertexPair, double> minCost = computeEdgeWeights(result.graph.getPrimalBoostGraph(), result.graph.getPrimalVertices(), result.graph.getPrimalEdges(), curvature.minimalDirection);
+    map<VertexPair, double> maxCost = computeEdgeWeights(result.graph.getPrimalBoostGraph(), result.graph.getPrimalVertices(), result.graph.getPrimalEdges(), curvature.maximalDirection);
 
-    Graph primal;
-    primal.buildGraphFromVerticesAndFaces(vertices, faces);
-    Eigen::MatrixXd weightsPrimalMax = computeEdgeWeights(vertices, primal.getEdges(), curvature.maximalDirection);
-    Eigen::MatrixXd weightsPrimalMin = computeEdgeWeights(vertices, primal.getEdges(), curvature.minimalDirection);
+    int prevGoodCyclesCount = 0;
+    double alpha = 2.0;
 
-    int genus = (2 - vertices.rows() + primal.getBoostEdges().size() - faces.rows())/2;
-    int maxIteration = 5*genus;
+    for(int x = 0; x < 3*result.graph.getGenus() && result.goodCycles.size() < 2*result.graph.getGenus(); x++) {
 
-    vector<vector<int>> goodCycles;
-    int iterationCounter = 0;
+        result.goodCycles.clear();
 
-    cout << "Object genus: " << genus << endl;
+        vector<pair<Graph, map<VertexPair, VertexPair>>> newCycleGraphs;
 
-    int prevCycleCount = 0;
+        if(x%2) {
+            cout << "Iteration [" << x << "]: maximal curvature direction" << endl; 
 
-    double threshold = GOOD_THRESHOLD_MAX;
+            vector<Edge> edgesToRemove;
 
-    while(goodCycles.size() < 2*genus && iterationCounter < maxIteration) {
-
-        Graph dual;
-
-        cout << "Iteration " << iterationCounter;
-
-        goodCycles.clear();
-
-        Graph tree, cotree;
-        Eigen::MatrixXd weights;
-
-        if (iterationCounter % 2 == 0) {
-            
-            cout << " ================================================= MAX" << endl;
-
-            weights = weightsPrimalMax;
-            cout << "Building tree ..." << endl;
-            tree = primal.buildMST(weightsPrimalMax);
-
-            dual = primal.getDual();
-            dual.removeEdgesForDual(tree.getEdges());
-
-            Eigen::MatrixXd weightsDualMax = transferDualWeights(weightsPrimalMax, dual.getEdges(), dual.getDualMap());
-            cout << "Building cotree ..." << endl;
-            cotree = dual.buildMST(weightsDualMax);
+            result.tree.push_back(result.graph.buildTree(edgesToRemove, maxCost));
+            result.cotree.push_back(result.graph.buildCotree(result.tree[x], maxCost));
         }
         else {
+            cout << "Iteration [" << x << "]: minimal curvature direction" << endl;
 
-            cout << " ================================================= MIN" << endl;
-
-            weights = weightsPrimalMin;
-            cout << "Building tree ..." << endl;
-            tree = primal.buildMST(weightsPrimalMin);
-
-            dual = primal.getDual();
-            dual.removeEdgesForDual(tree.getEdges());
-
-            Eigen::MatrixXd weightsDualMin = transferDualWeights(weightsPrimalMin, dual.getEdges(), dual.getDualMap());
-            cout << "Building cotree ..." << endl;
-            cotree = dual.buildMST(weightsDualMin);
+            vector<Edge> edgesToRemove;
+            
+            result.tree.push_back(result.graph.buildTree(edgesToRemove, minCost));
+            result.cotree.push_back(result.graph.buildCotree(result.tree[x], minCost));
         }
 
-        Graph cycles;
-        cycles.buildGraphFromVerticesAndEdges(primal.getVertices(), primal.getEdges());
-        cycles.removeEdges(tree.getEdges());
-        cycles.removeEdgesForInverseDual(cotree.getEdges(), dual.getDualMap());
-        vector<VertexPair> cycleEdges = cycles.getBoostEdges();
+        result.remainingEdges.push_back(result.graph.remainingEdges(result.tree[x], result.cotree[x]));
 
-        vector<pair<Cycle, double>> cycleCostPair;
+        pair<int, double> minCostAndIndex(-1, 99999);
 
-        for(vector<VertexPair>::iterator it = cycleEdges.begin(); it != cycleEdges.end(); it++) {
+        for(int i = 0; i < result.remainingEdges[x].size(); i++) {
+            Graph cycleGraph;
+            map<pair<int, int>, pair<int, int>> cycleToOriginal = cycleGraph.buildGraphFromVerticesAndEdges(
+                result.graph.getPrimalBoostGraph(), result.graph.getPrimalVertices(), result.tree[x], result.remainingEdges[x][i]);
 
-            vector<int> path = tree.findPathBetween(it->first, it->second, weights);
+            VertexPair found = Graph::queryUndirectedMap(cycleGraph.getSourceAndTarget().first, cycleGraph.getSourceAndTarget().second, cycleToOriginal);
 
-            Cycle newCycle = Cycle(cycles.getVertices(), path);
-            cycleCostPair.push_back(pair<Cycle, double>(newCycle, newCycle.getCycleCost(0.0)));
-        }
+            newCycleGraphs.push_back(pair<Graph, map<pair<int, int>, pair<int, int>>>(cycleGraph, cycleToOriginal));
 
-        sortCycles(cycleCostPair);
+            auto path = cycleGraph.findPathBetweenSourceAndTarget();
 
-        cout << "Testing against threshold: " << threshold << endl;
+            Cycle cycle(path.second, path.first);
 
-        for(int i = 0; i < cycleCostPair.size(); i++) {
+            if(cycle.getCycleCost(alpha) < GOOD_THRESHOLD || x == 3*result.graph.getGenus()-1) {
 
-            cout << cycleCostPair[i].second << endl;
+                pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = newCycleGraphs[i].first.findPathBetweenSourceAndTarget();
 
-            if (cycleCostPair[i].second < threshold && goodCycles.size() < 2*genus) {
+                vector<VertexPair> originalPath = newCycleGraphs[i].first.getPathBetweenSourceAndTarget(path.first, newCycleGraphs[i].second);
 
-                vector<int> result = cycleCostPair[i].first.getPath();
-                goodCycles.push_back(result);
+                result.goodCycles.push_back(i);
 
-                assignMinimumWeights(result, weightsPrimalMax);
-                assignMinimumWeights(result, weightsPrimalMin);
-            }
-            else {
-                break;
+                result.graph.assignWeightsTo(originalPath, minCost);
+                result.graph.assignWeightsTo(originalPath, maxCost);
             }
         }
 
-        iterationCounter++;
+        result.cycleGraphs.push_back(newCycleGraphs);
+        cout << "# of good cycles: " << result.goodCycles.size() << endl;
 
-        if(prevCycleCount >= goodCycles.size()) {
+        if(result.goodCycles.size() == prevGoodCyclesCount) {
 
-            threshold *= 1.2;
+            alpha *= DECAY_RATE;
 
-            cout << "Raising threshold to " << threshold << endl;
+            cout << "Increasing threshold." << endl;
         }
-        
-        prevCycleCount = goodCycles.size();
 
-        cout << "Found " << goodCycles.size() << " good cycles" << endl;
+        prevGoodCyclesCount = result.goodCycles.size();
     }
 
-    
-    return goodCycles;
+    return result;
 }
-*/

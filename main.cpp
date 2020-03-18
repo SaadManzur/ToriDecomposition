@@ -6,12 +6,9 @@
 #include "utils/graph.h"
 #include "utils/weight.h"
 #include "utils/cycle.h"
+#include "utils/toriDecomposition.h"
 
 using namespace std;
-
-#define DECAY_RATE 0.01
-
-double GOOD_THRESHOLD = 1000;
 
 Eigen::RowVector3d COLOR_RED = Eigen::RowVector3d(0.9, 0.05, 0.05);
 Eigen::RowVector3d COLOR_BLUE = Eigen::RowVector3d(0.05, 0.05, 0.9);
@@ -19,6 +16,7 @@ Eigen::RowVector3d COLOR_GREEN = Eigen::RowVector3d(0.05, 0.9, 0.05);
 
 Eigen::MatrixXd vertices;
 Eigen::MatrixXi faces;
+
 Graph graph;
 vector<vector<Edge>> tree;
 vector<vector<Edge>> cotree;
@@ -237,84 +235,16 @@ void printHelper() {
 int main(int argc, char *argv[]) {
 
   readFile("../models/fertility.off", vertices, faces);
-  
-  graph.buildGraphFromVerticesAndFaces(vertices, faces);
 
-  cout << "Model genus: " << graph.getGenus() << endl;
+  Result result = decomposeIntoTori(vertices, faces);
 
-  Curvature curvature;
-  computeCurvature(vertices, faces, curvature);
-  map<VertexPair, double> minCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.minimalDirection);
-  map<VertexPair, double> maxCost = computeEdgeWeights(graph.getPrimalBoostGraph(), graph.getPrimalVertices(), graph.getPrimalEdges(), curvature.maximalDirection);
-
-  int prevGoodCyclesCount = 0;
-  double alpha = 2.0;
-
-  for(int x = 0; x < 3*graph.getGenus() && goodCycles.size() < 2*graph.getGenus(); x++) {
-
-    goodCycles.clear();
-
-    vector<pair<Graph, map<VertexPair, VertexPair>>> newCycleGraphs;
-
-    if(x%2) {
-      cout << "Iteration [" << x << "]: maximal curvature direction" << endl; 
-
-      vector<Edge> edgesToRemove;
-
-      tree.push_back(graph.buildTree(edgesToRemove, maxCost));
-      cotree.push_back(graph.buildCotree(tree[x], maxCost));
-    }
-    else {
-      cout << "Iteration [" << x << "]: minimal curvature direction" << endl;
-
-      vector<Edge> edgesToRemove;
-      
-      tree.push_back(graph.buildTree(edgesToRemove, minCost));
-      cotree.push_back(graph.buildCotree(tree[x], minCost));
-    }
-
-    remainingEdges.push_back(graph.remainingEdges(tree[x], cotree[x]));
-
-    pair<int, double> minCostAndIndex(-1, 99999);
-
-    for(int i = 0; i < remainingEdges[x].size(); i++) {
-      Graph cycleGraph;
-      map<pair<int, int>, pair<int, int>> cycleToOriginal = cycleGraph.buildGraphFromVerticesAndEdges(
-        graph.getPrimalBoostGraph(), graph.getPrimalVertices(), tree[x], remainingEdges[x][i]);
-
-      VertexPair found = Graph::queryUndirectedMap(cycleGraph.getSourceAndTarget().first, cycleGraph.getSourceAndTarget().second, cycleToOriginal);
-
-      newCycleGraphs.push_back(pair<Graph, map<pair<int, int>, pair<int, int>>>(cycleGraph, cycleToOriginal));
-
-      auto path = cycleGraph.findPathBetweenSourceAndTarget();
-
-      Cycle cycle(path.second, path.first);
-
-      if(cycle.getCycleCost(alpha) < GOOD_THRESHOLD || x == 3*graph.getGenus()-1) {
-
-        pair<vector<Vertex>, vector<Eigen::RowVector3d>> path = newCycleGraphs[i].first.findPathBetweenSourceAndTarget();
-
-        vector<VertexPair> originalPath = newCycleGraphs[i].first.getPathBetweenSourceAndTarget(path.first, newCycleGraphs[i].second);
-
-        goodCycles.push_back(i);
-
-        graph.assignWeightsTo(originalPath, minCost);
-        graph.assignWeightsTo(originalPath, maxCost);
-      }
-    }
-
-    cycleGraphs.push_back(newCycleGraphs);
-    cout << "# of good cycles: " << goodCycles.size() << endl;
-
-    if(goodCycles.size() == prevGoodCyclesCount) {
-
-      alpha *= DECAY_RATE;
-
-      cout << "Increasing threshold." << endl;
-    }
-
-    prevGoodCyclesCount = goodCycles.size();
-  }
+  graph = result.graph;
+  tree = result.tree;
+  cotree = result.cotree;
+  remainingEdges = result.remainingEdges;
+  cycleGraphs = result.cycleGraphs;
+  minCostsAndIndices = result.minCostsAndIndices;
+  goodCycles = result.goodCycles;
 
   printHelper();
 

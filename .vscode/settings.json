@@ -19,6 +19,11 @@
         "nonlinearoptimization": "cpp",
         "vector": "cpp",
         "deque": "cpp",
-        "string": "cpp"
+        "string": "cpp",
+        "*.ipp": "cpp",
+        "string_view": "cpp",
+        "hash_map": "cpp",
+        "initializer_list": "cpp",
+        "utility": "cpp"
     }
 }
